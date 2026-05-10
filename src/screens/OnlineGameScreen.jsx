@@ -19,7 +19,7 @@ const SEAT_POSITIONS = [
 ];
 
 export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
-  const { socket } = useSocket();
+  const { socket, reconnecting } = useSocket();
   const [gs,         setGs]         = useState(null);
   const [raise,      setRaise]      = useState(40);
   const [toast,      setToast]      = useState(null);
@@ -389,6 +389,11 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
         )}
       </div>
 
+      {reconnecting && (
+        <div style={{ position:'fixed', top:0, left:0, right:0, zIndex:200, background:'rgba(180,30,30,0.92)', padding:'6px', textAlign:'center', fontSize:11, fontWeight:700, color:'#FFF', letterSpacing:1 }}>
+          ⚠️ מחבר מחדש לשרת...
+        </div>
+      )}
       {toast && <div style={{ position:'fixed', top:44, left:'50%', transform:'translateX(-50%)', background:'rgba(10,10,24,0.92)', border:'1px solid rgba(184,150,12,0.2)', borderRadius:10, padding:'5px 16px', zIndex:100, color:'#E5C94B', fontSize:12, fontWeight:700, backdropFilter:'blur(16px)', animation:'fadeIn 0.2s ease' }}>{toast}</div>}
 
       <HelpButton screen="game" />

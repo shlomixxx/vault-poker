@@ -18,6 +18,8 @@ const app        = express();
 const httpServer = http.createServer(app);
 const io         = new Server(httpServer, {
   cors: IS_PROD ? {} : { origin: '*' },
+  pingInterval: 25000,   // ping every 25s — keeps Railway proxy alive (60s timeout)
+  pingTimeout:  60000,   // wait 60s for pong before disconnecting
 });
 const PORT       = process.env.PORT || 3001;
 
