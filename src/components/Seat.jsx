@@ -5,9 +5,11 @@ import { TimerBar } from "./TimerBar";
  * A player's seat: hole cards, name chip, bet badge, and timer strip.
  * Positioned absolutely within the table oval via the `pos` prop.
  */
-export function Seat({ p, pos, isMe, showAll, bet, active, timerData, handResult, isWinner, isDealer }) {
+export function Seat({ p, pos, isMe, showAll, bet, active, timerData, handResult, isWinner, isDealer, hideSelfCards = false }) {
   const see = isMe || showAll;
   const highlightCards = handResult?.bestCards || [];
+  // hideSelfCards=true when online game shows cards in the bottom panel instead
+  const showHandOnTable = !isMe || showAll || !hideSelfCards;
 
   return (
     <div style={{
@@ -20,7 +22,7 @@ export function Seat({ p, pos, isMe, showAll, bet, active, timerData, handResult
     }}>
 
       {/* Hole cards or FOLD label */}
-      {p.c && p.c.length > 0 && !p.f ? (
+      {p.c && p.c.length > 0 && !p.f && showHandOnTable ? (
         <Hand
           cards={p.c} faceDown={!see}
           w={isMe ? 48 : 30} h={isMe ? 67 : 42} delay={300}

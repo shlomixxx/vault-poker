@@ -158,14 +158,18 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
   const totalPot    = pot + (bets||[]).reduce((a,b)=>a+b,0);
   const displayPot  = (phase === 'showdown' && winner?.totalPot) ? winner.totalPot : totalPot;
   const myBet       = (bets||[])[myIdx] || 0;
-  const callAmt     = Math.min(curBet - myBet, players[myIdx]?.ch || 0);
+  const myChips     = players[myIdx]?.ch || 0;
+  const callAmt     = Math.min(curBet - myBet, myChips);
   const canCheck    = curBet <= myBet;
+  // Can only raise if player has chips beyond what's needed just to call
+  const canRaise    = myChips > (curBet - myBet);
   const n           = players.length;
   const seats       = SEAT_POSITIONS.slice(0, n);
   const winnerCards = winner?.bestCards || [];
-  const raiseMin    = Math.max(curBet*2, settings?.bb*2 || 20);
-  const raiseMax    = Math.max(players[myIdx]?.ch || 0, raiseMin);
-  const raisePct    = raiseMax>raiseMin ? ((raise-raiseMin)/(raiseMax-raiseMin))*100 : 0;
+  const raiseMin    = Math.min(Math.max(curBet*2, settings?.bb*2 || 20), myChips);
+  const raiseMax    = myChips;
+  const effectiveRaise = Math.min(raise, myChips);
+  const raisePct    = raiseMax > raiseMin ? ((effectiveRaise - raiseMin) / (raiseMax - raiseMin)) * 100 : 100;
   const roomCode    = gs.roomId || roomId || '';
 
   return (
@@ -204,9 +208,9 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
                 )}
               </div>
             </div>
-            {/* Community cards */}
+            {/* Community cards — only render when there are cards to show (not preflop) */}
             <div style={{ position:'absolute', top:'48%', left:'50%', transform:'translate(-50%,-50%)', zIndex:11 }}>
-              {board?.length>0 && <Community board={board} count={revealCount} pkey={pkey} highlightCards={phase==='showdown'?winnerCards:[]} />}
+              {revealCount > 0 && <Community board={board} count={revealCount} pkey={pkey} highlightCards={phase==='showdown'?winnerCards:[]} />}
             </div>
             {/* Seats */}
             {players.map((p, i) => (
@@ -219,6 +223,7 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
                 handResult={handResults[i]||null}
                 isWinner={winner?.idx===i}
                 isDealer={i===dealerIdx}
+                hideSelfCards={!isSpectator && i===myIdx}
               />
             ))}
           </div>
@@ -368,14 +373,14 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
             <div style={{ textAlign:'center', marginBottom:5, fontSize:10, color:isMyTurn?'#E5C94B':'#666', fontWeight:700 }}>
               {isMyTurn ? '🎯 התור שלך!' : `⏳ ממתין ל-${players[turn]?.name}...`}
             </div>
-            {isMyTurn && (
+            {isMyTurn && canRaise && (
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:5 }}>
                 <span style={{ fontSize:8, color:'#666' }}>RAISE</span>
-                <input type="range" min={raiseMin} max={raiseMax} step={10} value={Math.max(raise,raiseMin)}
+                <input type="range" min={raiseMin} max={raiseMax} step={10} value={Math.min(Math.max(raise, raiseMin), raiseMax)}
                   onChange={e => { const v=+e.target.value; setRaise(v); raiseRef.current=v; }}
                   style={{ ...sliderStyle, flex:1, background:`linear-gradient(90deg,#C5A028 ${raisePct}%,rgba(255,255,255,0.04) ${raisePct}%)` }}
                 />
-                <div style={{ background:'rgba(184,150,12,0.08)', border:'1px solid rgba(184,150,12,0.12)', borderRadius:6, padding:'2px 7px', fontSize:12, fontWeight:800, color:'#E5C94B', fontFamily:'Georgia,serif', minWidth:42, textAlign:'center' }}>{raise}</div>
+                <div style={{ background:'rgba(184,150,12,0.08)', border:'1px solid rgba(184,150,12,0.12)', borderRadius:6, padding:'2px 7px', fontSize:12, fontWeight:800, color:'#E5C94B', fontFamily:'Georgia,serif', minWidth:42, textAlign:'center' }}>{effectiveRaise}</div>
               </div>
             )}
             <div style={{ display:'flex', gap:4, opacity:isMyTurn?1:0.35, pointerEvents:isMyTurn?'auto':'none' }}>
@@ -384,7 +389,9 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
                 ? <button onClick={()=>sendAction('CHECK')}   style={abtn('#8899AA','rgba(136,153,170,0.1)')}><span style={{ fontSize:11, fontWeight:800 }}>CHECK</span></button>
                 : <button onClick={()=>sendAction('CALL')}    style={abtn('#4488FF','rgba(68,136,255,0.15)')}><span style={{ fontSize:11, fontWeight:800 }}>CALL</span><span style={{ fontSize:9, opacity:0.6 }}>{callAmt}</span></button>
               }
-              <button onClick={()=>sendAction('RAISE',raise)} style={abtn('#E5C94B','rgba(184,150,12,0.2)')}><span style={{ fontSize:11, fontWeight:800 }}>RAISE</span><span style={{ fontSize:9, opacity:0.6 }}>{raise}</span></button>
+              {canRaise && (
+                <button onClick={()=>sendAction('RAISE', effectiveRaise)} style={abtn('#E5C94B','rgba(184,150,12,0.2)')}><span style={{ fontSize:11, fontWeight:800 }}>RAISE</span><span style={{ fontSize:9, opacity:0.6 }}>{effectiveRaise}</span></button>
+              )}
               <button onClick={()=>sendAction('ALL_IN')}  style={abtn('#FFF','rgba(184,150,12,0.25)')}><span style={{ fontSize:11, fontWeight:800 }}>ALL IN</span></button>
             </div>
           </>
