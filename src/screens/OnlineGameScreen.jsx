@@ -149,6 +149,7 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
   const revealCount = PH_REVEAL[phase] || 0;
   const isMyTurn    = !isSpectator && turn === myIdx;
   const totalPot    = pot + (bets||[]).reduce((a,b)=>a+b,0);
+  const displayPot  = (phase === 'showdown' && winner?.totalPot) ? winner.totalPot : totalPot;
   const myBet       = (bets||[])[myIdx] || 0;
   const callAmt     = Math.min(curBet - myBet, players[myIdx]?.ch || 0);
   const canCheck    = curBet <= myBet;
@@ -190,7 +191,7 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
             <div style={{ position:'absolute', top:'25%', left:'50%', transform:'translate(-50%,-50%)', zIndex:11 }}>
               <div style={{ background:'rgba(0,0,0,0.5)', borderRadius:12, padding:'4px 16px', border:'1px solid rgba(184,150,12,0.1)', textAlign:'center' }}>
                 <div style={{ fontSize:7, color:'#999', letterSpacing:2 }}>POT</div>
-                <div style={{ fontSize:20, fontWeight:900, color:'#E5C94B', fontFamily:'Georgia,serif', lineHeight:1 }}>{totalPot.toLocaleString()}</div>
+                <div style={{ fontSize:20, fontWeight:900, color:'#E5C94B', fontFamily:'Georgia,serif', lineHeight:1 }}>{displayPot.toLocaleString()}</div>
                 {(settings?.rakePct > 0) && (
                   <div style={{ fontSize:7, color:'#666', marginTop:1 }}>🏠 {settings.rakePct}% עמלה</div>
                 )}
@@ -305,7 +306,7 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
               {(gs.potSummary).map((pr,idx) => (
                 <div key={idx} style={{ display:'flex', justifyContent:'space-between', fontSize:9, color:'#888' }}>
                   <span style={{ color:'#C5A028' }}>{idx===0?'Main Pot':`Side Pot ${idx}`} {pr.isSplit?'(תיקו)':''}</span>
-                  <span>{pr.winners.map(wi => players[wi]?.n||wi).join(' & ')} +{pr.amount.toLocaleString()}</span>
+                  <span style={{ direction:'ltr' }}>+{pr.amount.toLocaleString()} {pr.winners.map(wi => players[wi]?.n||wi).join(' & ')}</span>
                 </div>
               ))}
             </div>

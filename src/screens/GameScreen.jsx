@@ -272,6 +272,7 @@ export function GameScreen({ settings, onExit }) {
           handEn: results[mainIdx]?.name || '',
           bestCards: results[mainIdx]?.bestCards || [],
           amount: winnings[mainIdx],
+          totalPot: totalPotVal,
         });
         playWin();
       }
@@ -346,7 +347,7 @@ export function GameScreen({ settings, onExit }) {
       const winIdx   = p.indexOf(remaining[0]);
       p[winIdx].ch  += totalWin;
       setPlayers(p); setBets(Array(n).fill(0)); setPot(0);
-      setWinner({ idx: winIdx, name: remaining[0].n, hand: "כולם עשו Fold", bestCards: [], amount: totalWin });
+      setWinner({ idx: winIdx, name: remaining[0].n, hand: "כולם עשו Fold", bestCards: [], amount: totalWin, totalPot: totalWin });
       setPhaseIdx(4); setHandResults([]);
       playWin();
       return;
@@ -396,6 +397,7 @@ export function GameScreen({ settings, onExit }) {
   const canCheck       = curBet <= (bets[0] || 0);
   const seats          = SEAT_POSITIONS.slice(0, n);
   const totalPot       = pot + bets.reduce((a, b) => a + b, 0);
+  const displayPot     = (phase === 'showdown' && winner?.totalPot) ? winner.totalPot : totalPot;
   const winnerBestCards = winner?.bestCards || [];
   const raiseMin       = Math.max(curBet * 2, settings.bb * 2);
   const raiseMax       = Math.max(players[0]?.ch || 0, raiseMin);
@@ -416,7 +418,7 @@ export function GameScreen({ settings, onExit }) {
           <span style={{ fontSize: 14, fontWeight: 900, color: "#C5A028", letterSpacing: 2, fontFamily: "Georgia,serif" }}>VAULT</span>
           <div style={{ background: phase === "showdown" ? "rgba(184,150,12,0.2)" : "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6, padding: "2px 8px", fontSize: 9, fontWeight: 800, color: phase === "showdown" ? "#E5C94B" : "#888", letterSpacing: 1 }}>{PH_LABEL[phase]}</div>
         </div>
-        <div style={{ fontSize: 9, color: "#555" }}>⏱️{settings.timer}s · 🎯{settings.sb}/{settings.bb}</div>
+        <div style={{ fontSize: 9, color: "#555", direction: "ltr" }}>{settings.timer}s ⏱️ · {settings.sb}/{settings.bb} 🎯</div>
       </div>
 
       {/* ── Table oval ── */}
@@ -428,7 +430,7 @@ export function GameScreen({ settings, onExit }) {
             <div style={{ position: "absolute", top: "25%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 11 }}>
               <div style={{ background: "rgba(0,0,0,0.5)", borderRadius: 12, padding: "4px 16px", border: "1px solid rgba(184,150,12,0.1)", textAlign: "center" }}>
                 <div style={{ fontSize: 7, color: "#999", letterSpacing: 2 }}>POT</div>
-                <div style={{ fontSize: 20, fontWeight: 900, color: "#E5C94B", fontFamily: "Georgia,serif", lineHeight: 1 }}>{totalPot.toLocaleString()}</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "#E5C94B", fontFamily: "Georgia,serif", lineHeight: 1 }}>{displayPot.toLocaleString()}</div>
               </div>
             </div>
 
@@ -525,7 +527,7 @@ export function GameScreen({ settings, onExit }) {
               {potResults.map((pr, idx) => (
                 <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "#888" }}>
                   <span style={{ color: "#C5A028" }}>{idx === 0 ? "Main Pot" : `Side Pot ${idx}`} {pr.isSplit ? "(תיקו)" : ""}</span>
-                  <span>{pr.winners.map(wi => players[wi]?.n || wi).join(" & ")} +{pr.amount.toLocaleString()}</span>
+                  <span style={{ direction: "ltr" }}>+{pr.amount.toLocaleString()} {pr.winners.map(wi => players[wi]?.n || wi).join(" & ")}</span>
                 </div>
               ))}
             </div>

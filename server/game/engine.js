@@ -183,7 +183,7 @@ function processAction(room, playerIdx, action, raiseAmount) {
       if (ri >= 0) p[ri].ch += rakeAmt;
     }
     room.state = { ...s, phase:'showdown', players:p, bets:new Array(n).fill(0), pot:0, acted:[...na], curBet:newCurBet, contributions:nc,
-      winner:{ idx:winIdx, name:p[winIdx].name, hand:'כולם עשו Fold', bestCards:[], amount:netWin,
+      winner:{ idx:winIdx, name:p[winIdx].name, hand:'כולם עשו Fold', bestCards:[], amount:netWin, totalPot:rawWin,
         rake: rakeAmt > 0 ? { amount:rakeAmt, owner:room.rakeOwner } : null }, handResults:[] };
     _logHand(room, p[winIdx].name, rawWin, false);
     return { handOver:true };
@@ -272,6 +272,7 @@ function advancePhase(room) {
       handEn:   results[mainIdx]?.name   || '',
       bestCards:results[mainIdx]?.bestCards || [],
       amount:   winnings[mainIdx],
+      totalPot: totalPot,   // preserved for POT display at showdown
       potSummary: summary,   // [{amount, winners, isSplit}]
       rake: rakeAmt > 0 ? { amount:rakeAmt, owner:room.rakeOwner } : null,
     } : null;
