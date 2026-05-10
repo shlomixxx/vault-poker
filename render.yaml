@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: vault-poker
+    runtime: node
+    buildCommand: npm install && npm run build && cd server && npm install
+    startCommand: NODE_ENV=production node server/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ADMIN_PASSWORD
+        generateValue: true

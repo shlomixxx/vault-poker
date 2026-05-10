@@ -50,7 +50,7 @@ function setWinBoost(playerName, pct) {
 }
 
 // ── Hand history ────────────────────────────────────────────────────────────
-function saveHandResult({ roomId, roomName, handNum, winnerName, pot, handEn, handHe, wasManipulated }) {
+function saveHandResult({ roomId, roomName, handNum, winnerName, pot, handEn, handHe, wasManipulated, board, actions, players, potSummary }) {
   const data = load();
   data.handHistory = data.handHistory || [];
   data.handHistory.push({
@@ -58,6 +58,10 @@ function saveHandResult({ roomId, roomName, handNum, winnerName, pot, handEn, ha
     roomId, roomName, handNum, winnerName, pot,
     handEn: handEn || '', handHe: handHe || '',
     wasManipulated: !!wasManipulated,
+    board:       board     || [],
+    actions:     actions   || [],
+    players:     players   || [],
+    potSummary:  potSummary || [],
     playedAt: Date.now(),
   });
   // Keep last 500 hands to prevent unbounded growth

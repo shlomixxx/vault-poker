@@ -299,4 +299,35 @@ function stateForPlayer(room, viewerName) {
   };
 }
 
-module.exports = { createRoom, addPlayer, buildHand, processAction, rotateDealerForNewHand, stateForPlayer };
+// ── Spectator state (hides all hole cards until showdown) ──────────────────
+function stateForSpectator(room) {
+  const s = room.state;
+  return {
+    roomId:    room.id,
+    roomName:  room.name,
+    settings:  room.settings,
+    myIdx:     -1,
+    isSpectator: true,
+    phase:     s.phase,
+    players:   s.players.map(p => ({
+      ...p,
+      n: p.name,
+      a: p.avatar,
+      c: s.phase === 'showdown' ? p.c : (p.f ? [] : ['??','??']),
+    })),
+    board:       s.board,
+    bets:        s.bets,
+    pot:         s.pot,
+    turn:        s.turn,
+    curBet:      s.curBet,
+    dealerIdx:   s.dealerIdx,
+    acted:       s.acted,
+    winner:      s.winner,
+    handResults: s.handResults,
+    pkey:        s.pkey,
+    handNum:     s.handNum,
+    potSummary:  s.winner?.potSummary || [],
+  };
+}
+
+module.exports = { createRoom, addPlayer, buildHand, processAction, rotateDealerForNewHand, stateForPlayer, stateForSpectator };

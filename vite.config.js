@@ -6,10 +6,11 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Forward API calls to the Node server during development
-      '/api': {
+      '/api': { target: 'http://localhost:3001', changeOrigin: true },
+      '/socket.io': {
         target: 'http://localhost:3001',
         changeOrigin: true,
+        ws: true,
       },
     },
   },

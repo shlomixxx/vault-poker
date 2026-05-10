@@ -6,7 +6,7 @@ import { HelpButton }   from "../components/HelpButton";
 import { useSocket }    from "../context/SocketContext";
 import { lbl, inp, sliderStyle, primaryBtn } from "../styles/ui";
 
-export function LobbyScreen({ onStart, onStartOnline }) {
+export function LobbyScreen({ onStart, onStartOnline, onStats }) {
   const { socket } = useSocket();
 
   // ── Offline state ──────────────────────────────────────────────────────────
@@ -32,6 +32,20 @@ export function LobbyScreen({ onStart, onStartOnline }) {
   const [joinCode,       setJoinCode]       = useState("");
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState(null);
+  const [copiedLink,     setCopiedLink]     = useState(false);
+
+  // ── Read ?room=XXX from URL on mount → auto-switch to join tab ────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const roomFromUrl = params.get("room");
+    if (roomFromUrl) {
+      setMode("online");
+      setOnlineTab("join");
+      setJoinCode(roomFromUrl.toUpperCase());
+      // Clean the URL without reload
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   const applyPreset = (k) => { setPreset(k); setSettings(s => ({ ...s, ...PRESETS[k] })); };
   const set    = (k, v) => setSettings(s => ({ ...s, [k]: v }));
@@ -50,6 +64,18 @@ export function LobbyScreen({ onStart, onStartOnline }) {
     return () => clearInterval(interval);
   }, [mode, fetchRooms]);
 
+  // ── Copy share link ────────────────────────────────────────────────────────
+  const copyShareLink = (code) => {
+    const url = `${window.location.origin}${window.location.pathname}?room=${code}`;
+    if (navigator.share) {
+      navigator.share({ title: "VAULT Poker", text: `הצטרף לשולחן! קוד: ${code}`, url });
+    } else {
+      navigator.clipboard.writeText(url).catch(() => {});
+    }
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
   // ── Online join ────────────────────────────────────────────────────────────
   const handleJoin = (code) => {
     const name = playerName.trim();
@@ -59,7 +85,7 @@ export function LobbyScreen({ onStart, onStartOnline }) {
     setLoading(true);
     socket.emit('join_room', { roomId: code.trim().toUpperCase(), playerName: name }, (res) => {
       setLoading(false);
-      if (res?.success) { onStartOnline(); }
+      if (res?.success) { onStartOnline(code.trim().toUpperCase()); }
       else { setError(res?.error || "שגיאה בהצטרפות"); }
     });
   };
@@ -72,8 +98,12 @@ export function LobbyScreen({ onStart, onStartOnline }) {
     setLoading(true);
     socket.emit('create_room', { name: onlineSettings.name, settings: onlineSettings, playerName: name }, (res) => {
       setLoading(false);
-      if (res?.success) { onStartOnline(); }
-      else { setError(res?.error || "שגיאה ביצירת חדר"); }
+      if (res?.success) {
+        copyShareLink(res.roomId);
+        onStartOnline(res.roomId);
+      } else {
+        setError(res?.error || "שגיאה ביצירת חדר");
+      }
     });
   };
 
@@ -92,7 +122,10 @@ export function LobbyScreen({ onStart, onStartOnline }) {
       padding: "20px 16px 80px", fontFamily: "'Segoe UI',sans-serif",
     }}>
       <span style={{ fontSize: 28, fontWeight: 900, color: "#C5A028", letterSpacing: 5, fontFamily: "Georgia,serif", marginBottom: 4 }}>VAULT</span>
-      <span style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 24 }}>POKER</span>
+      <span style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 12 }}>POKER</span>
+      <button onClick={onStats} style={{ fontSize: 10, color: "#888", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6, padding: "4px 14px", cursor: "pointer", marginBottom: 16, fontWeight: 600 }}>
+        📊 לוח מובילים
+      </button>
 
       {/* ── Mode tabs: Offline / Online ── */}
       <div style={{ display: "flex", gap: 0, marginBottom: 20, borderRadius: 10, overflow: "hidden", border: "1px solid rgba(184,150,12,0.15)" }}>
@@ -138,14 +171,26 @@ export function LobbyScreen({ onStart, onStartOnline }) {
                   <span style={{ fontSize: 10, color: "#444" }}>צור חדר חדש וזמן חברים</span>
                 </div>
               ) : rooms.map(r => (
-                <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 10, padding: "10px 14px", marginBottom: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#DDD" }}>{r.name}</div>
-                    <div style={{ fontSize: 10, color: "#666", marginTop: 2 }}>קוד: <b style={{ color: "#C5A028", fontFamily: "Georgia,serif" }}>{r.id}</b> · {r.players}/{r.maxPlayers} שחקנים</div>
+                <div key={r.id} style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${r.spectatable ? "rgba(100,100,255,0.12)" : "rgba(255,255,255,0.06)"}`, borderRadius: 10, padding: "10px 14px", marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#DDD" }}>{r.name}</div>
+                      <div style={{ fontSize: 10, color: "#666", marginTop: 2 }}>
+                        קוד: <b style={{ color: "#C5A028", fontFamily: "Georgia,serif" }}>{r.id}</b> · {r.players}/{r.maxPlayers} שחקנים
+                        {r.spectatable && <span style={{ marginRight: 6, color: "#7C7CFF" }}>· 🔴 LIVE</span>}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={() => copyShareLink(r.id)} style={{ background: "rgba(184,150,12,0.08)", border: "1px solid rgba(184,150,12,0.15)", borderRadius: 7, color: "#C5A028", padding: "5px 10px", fontSize: 10, cursor: "pointer" }}>🔗</button>
+                      {r.spectatable
+                        ? <button onClick={() => { onStartOnline(r.id, true); }} disabled={loading} style={{ background: "rgba(100,100,255,0.1)", border: "1px solid rgba(100,100,255,0.25)", borderRadius: 7, color: "#9090FF", padding: "5px 10px", fontSize: 10, cursor: "pointer", fontWeight: 700 }}>👁️ צפה</button>
+                        : <button onClick={() => handleJoin(r.id)} disabled={loading} style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: 7, color: "#22C55E", padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>הצטרף</button>
+                      }
+                    </div>
                   </div>
-                  <button onClick={() => handleJoin(r.id)} disabled={loading} style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: 8, color: "#22C55E", padding: "6px 14px", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>הצטרף</button>
                 </div>
               ))}
+              {copiedLink && <div style={{ textAlign: "center", fontSize: 10, color: "#22C55E", padding: "4px 0" }}>✓ קישור הועתק!</div>}
               <button onClick={fetchRooms} style={{ width: "100%", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, color: "#555", padding: "7px", fontSize: 10, cursor: "pointer", marginTop: 4 }}>🔄 רענן</button>
             </div>
           )}

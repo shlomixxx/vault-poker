@@ -4,26 +4,37 @@ import { LobbyScreen }    from "./screens/LobbyScreen";
 import { GameScreen }     from "./screens/GameScreen";
 import { OnlineGameScreen } from "./screens/OnlineGameScreen";
 import { AdminScreen }    from "./screens/AdminScreen";
+import { StatsScreen }    from "./screens/StatsScreen";
 
 function AppRouter() {
   const [screen, setScreen] = useState(() =>
     window.location.pathname.startsWith('/admin') ? 'admin' : 'lobby'
   );
   const [offlineSettings, setOfflineSettings] = useState(null);
+  const [activeRoomId,    setActiveRoomId]    = useState(null);
+  const [isSpectating,    setIsSpectating]    = useState(false);
 
   const goLobby = () => {
     window.history.pushState({}, '', '/');
     setScreen('lobby');
+    setActiveRoomId(null);
+    setIsSpectating(false);
   };
 
-  if (screen === 'admin')  return <AdminScreen  onExit={goLobby} />;
-  if (screen === 'game')   return <GameScreen   settings={offlineSettings} onExit={goLobby} />;
-  if (screen === 'online') return <OnlineGameScreen onExit={goLobby} />;
+  if (screen === 'admin')   return <AdminScreen  onExit={goLobby} />;
+  if (screen === 'stats')   return <StatsScreen  onExit={goLobby} />;
+  if (screen === 'game')    return <GameScreen   settings={offlineSettings} onExit={goLobby} />;
+  if (screen === 'online')  return <OnlineGameScreen roomId={activeRoomId} isSpectator={isSpectating} onExit={goLobby} />;
 
   return (
     <LobbyScreen
       onStart={s => { setOfflineSettings(s); setScreen('game'); }}
-      onStartOnline={() => setScreen('online')}
+      onStartOnline={(roomId, spectate = false) => {
+        setActiveRoomId(roomId || null);
+        setIsSpectating(!!spectate);
+        setScreen('online');
+      }}
+      onStats={() => setScreen('stats')}
     />
   );
 }
