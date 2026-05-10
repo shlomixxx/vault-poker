@@ -28,8 +28,10 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
   const [chatLog,    setChatLog]    = useState([]);
   const [unread,     setUnread]     = useState(0);
   const [copiedLink, setCopiedLink] = useState(false);
-  const raiseRef  = useRef(40);
+  const [actionLog,  setActionLog]  = useState([]);
+  const raiseRef   = useRef(40);
   const chatEndRef = useRef(null);
+  const prevPkeyRef = useRef(null);
 
   const showToast = (msg, duration = 2500) => {
     setToast(msg);
@@ -58,9 +60,31 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
       if (!chatOpen) setUnread(u => u + 1);
     };
 
+    const ACTION_LABELS = { FOLD:'Fold', CHECK:'Check', CALL:'Call', RAISE:'Raise', ALL_IN:'All In', ALL_IN_ENG:'All In' };
+    const PHASE_LABELS  = { flop:'— FLOP —', turn:'— TURN —', river:'— RIVER —', showdown:'— SHOWDOWN —', preflop:'— PRE-FLOP —' };
+
+    const onActionEvent = (ev) => {
+      const addEntry = (text, type = 'action') =>
+        setActionLog(prev => [...prev.slice(-29), { text, type, id: Date.now() + Math.random() }]);
+
+      if (ev.type === 'new_hand') {
+        setActionLog([]); // clear on new hand
+        addEntry(`— יד #${ev.handNum} —`, 'phase');
+      } else if (ev.type === 'phase') {
+        addEntry(PHASE_LABELS[ev.phase] || ev.phase, 'phase');
+      } else if (ev.type === 'showdown') {
+        addEntry('— SHOWDOWN —', 'phase');
+      } else if (ev.sender) {
+        const label = ACTION_LABELS[ev.type] || ev.type;
+        const amt   = ev.amount > 0 ? ` ${ev.amount}` : '';
+        addEntry(`${ev.sender}: ${label}${amt}${ev.auto ? ' ⏱️' : ''}`);
+      }
+    };
+
     socket.on('game_state',          onState);
-    socket.on('spectator_state',     onState); // spectators also receive this
+    socket.on('spectator_state',     onState);
     socket.on('chat_message',        onChat);
+    socket.on('action_event',        onActionEvent);
     socket.on('player_joined',       ({ playerName }) => showToast(`👋 ${playerName} הצטרף`));
     socket.on('player_reconnected',  ({ playerName }) => showToast(`🔄 ${playerName} חזר`));
     socket.on('player_disconnected', ({ playerName }) => showToast(`⚠️ ${playerName} התנתק`));
@@ -70,6 +94,7 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
       socket.off('game_state', onState);
       socket.off('spectator_state', onState);
       socket.off('chat_message', onChat);
+      socket.off('action_event', onActionEvent);
       socket.off('player_joined');
       socket.off('player_reconnected');
       socket.off('player_disconnected');
@@ -102,8 +127,10 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  const startGame = () => socket?.emit('start_game');
-  const newHand   = () => socket?.emit('new_hand');
+  const startGame = () => socket?.emit('start_game', (res) => {
+    if (!res?.success) showToast(res?.error || 'שגיאה בהתחלת משחק');
+  });
+  const newHand = () => socket?.emit('new_hand');
 
   // ── Loading / waiting ──
   if (!gs) {
@@ -293,6 +320,21 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
         <div style={{ display:'flex', gap:3, marginBottom:6, justifyContent:'center' }}>
           {PHASES.map((ph,i) => <div key={ph} style={{ flex:1, height:3, borderRadius:2, maxWidth:55, background:i<phaseIdx?'rgba(184,150,12,0.4)':i===phaseIdx?'#C5A028':'rgba(255,255,255,0.04)' }} />)}
         </div>
+
+        {/* Action log */}
+        {actionLog.length > 0 && (
+          <div style={{ maxHeight: 48, overflowY: 'auto', marginBottom: 4, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {actionLog.slice(-6).map(entry => (
+              <div key={entry.id} style={{
+                fontSize: 8, fontWeight: entry.type === 'phase' ? 700 : 500,
+                color: entry.type === 'phase' ? '#C5A028' : '#666',
+                textAlign: entry.type === 'phase' ? 'center' : 'right',
+                letterSpacing: entry.type === 'phase' ? 1 : 0,
+                lineHeight: 1.4,
+              }}>{entry.text}</div>
+            ))}
+          </div>
+        )}
 
         {/* Spectator view */}
         {isSpectator ? (

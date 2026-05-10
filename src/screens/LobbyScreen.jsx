@@ -64,11 +64,13 @@ export function LobbyScreen({ onStart, onStartOnline, onStats }) {
     return () => clearInterval(interval);
   }, [mode, fetchRooms]);
 
-  // ── Copy share link ────────────────────────────────────────────────────────
+  // ── Copy share link (clipboard only — no native share dialog auto-pop) ────
   const copyShareLink = (code) => {
     const url = `${window.location.origin}${window.location.pathname}?room=${code}`;
+    // Use native share only on explicit user gesture; always fall back to clipboard
     if (navigator.share) {
-      navigator.share({ title: "VAULT Poker", text: `הצטרף לשולחן! קוד: ${code}`, url });
+      navigator.share({ title: "VAULT Poker", text: `הצטרף לשולחן! קוד: ${code}`, url })
+        .catch(() => navigator.clipboard.writeText(url).catch(() => {}));
     } else {
       navigator.clipboard.writeText(url).catch(() => {});
     }
@@ -99,7 +101,9 @@ export function LobbyScreen({ onStart, onStartOnline, onStats }) {
     socket.emit('create_room', { name: onlineSettings.name, settings: onlineSettings, playerName: name }, (res) => {
       setLoading(false);
       if (res?.success) {
-        copyShareLink(res.roomId);
+        // Copy link to clipboard silently — no auto native-share dialog (causes AbortError)
+        const url = `${window.location.origin}${window.location.pathname}?room=${res.roomId}`;
+        navigator.clipboard.writeText(url).catch(() => {});
         onStartOnline(res.roomId);
       } else {
         setError(res?.error || "שגיאה ביצירת חדר");

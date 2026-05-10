@@ -86,16 +86,22 @@ function clearTurnTimer(roomId) {
 function startTurnTimer(room) {
   clearTurnTimer(room.id);
   const { timer, bank, autoAction } = room.settings;
-  const totalMs = (timer + bank + 3) * 1000; // a little buffer
+  const totalMs = (timer + bank + 3) * 1000;
   turnTimers.set(room.id, setTimeout(() => {
     const s = room.state;
     if (s.phase === 'showdown' || s.phase === 'waiting') return;
-    const canCheck = s.curBet <= (s.bets[s.turn] || 0);
-    const action   = (autoAction === 'check_fold' && canCheck) ? 'CHECK' : 'FOLD';
-    const result   = engine.processAction(room, s.turn, action);
+    const playerName = s.players[s.turn]?.name || '?';
+    const canCheck   = s.curBet <= (s.bets[s.turn] || 0);
+    const action     = (autoAction === 'check_fold' && canCheck) ? 'CHECK' : 'FOLD';
+    appendAction(room.id, { playerName, action, amount: 0, phase: s.phase });
+    io.to(room.id).emit('action_event', { sender: playerName, type: action, amount: 0, auto: true });
+    const result = engine.processAction(room, s.turn, action);
     if (result.handOver) persistHand(room);
     broadcastRoom(room);
-    if (s.phase !== 'showdown') startTurnTimer(room);
+    broadcastSpectatorsInRoom(room);
+    if (result.handOver) io.to(room.id).emit('action_event', { type: 'showdown' });
+    else if (room.state.phase !== s.phase) io.to(room.id).emit('action_event', { type: 'phase', phase: room.state.phase });
+    else startTurnTimer(room);
   }, totalMs));
 }
 
@@ -211,9 +217,10 @@ io.on('connection', socket => {
   socket.on('start_game', cb => {
     const room = rooms.get(myRoomId);
     if (!room) { cb?.({ success:false, error:'חדר לא קיים' }); return; }
-    if (room.state.players.length < 2) { cb?.({ success:false, error:'דרושים לפחות 2 שחקנים' }); return; }
+    if (room.state.players.length < 2) { cb?.({ success:false, error:'נדרשים לפחות 2 שחקנים כדי להתחיל' }); return; }
     handActionLogs.delete(myRoomId);
     engine.buildHand(room, db.getWinBoosts());
+    io.to(myRoomId).emit('action_event', { type: 'new_hand', handNum: room.state.handNum });
     broadcastRoom(room);
     broadcastSpectatorsInRoom(room);
     startTurnTimer(room);
@@ -230,9 +237,16 @@ io.on('connection', socket => {
     if (s.phase === 'showdown' || s.phase === 'waiting') return;
 
     appendAction(myRoomId, { playerName: myName, action: type, amount: amount || 0, phase: s.phase });
+    io.to(myRoomId).emit('action_event', { sender: myName, type, amount: amount || 0 });
     clearTurnTimer(room.id);
+    const phaseBefore = s.phase;
     const result = engine.processAction(room, playerIdx, type, amount);
-    if (result.handOver) persistHand(room);
+    if (result.handOver) {
+      persistHand(room);
+      io.to(myRoomId).emit('action_event', { type: 'showdown' });
+    } else if (room.state.phase !== phaseBefore) {
+      io.to(myRoomId).emit('action_event', { type: 'phase', phase: room.state.phase });
+    }
     broadcastRoom(room);
     broadcastSpectatorsInRoom(room);
     if (!result.handOver) startTurnTimer(room);
@@ -265,6 +279,7 @@ io.on('connection', socket => {
     handActionLogs.delete(myRoomId);
     engine.rotateDealerForNewHand(room);
     engine.buildHand(room, db.getWinBoosts());
+    io.to(myRoomId).emit('action_event', { type: 'new_hand', handNum: room.state.handNum });
     broadcastRoom(room);
     broadcastSpectatorsInRoom(room);
     startTurnTimer(room);
