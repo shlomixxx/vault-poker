@@ -6,7 +6,7 @@ import { HelpButton }   from "../components/HelpButton";
 import { useSocket }    from "../context/SocketContext";
 import { lbl, inp, sliderStyle, primaryBtn } from "../styles/ui";
 
-export function LobbyScreen({ onStart, onStartOnline, onStats }) {
+export function LobbyScreen({ onStart, onStartOnline, onStats, lastRoom = null, onClearLastRoom }) {
   const { socket } = useSocket();
 
   // ── Offline state ──────────────────────────────────────────────────────────
@@ -29,6 +29,7 @@ export function LobbyScreen({ onStart, onStartOnline, onStats }) {
   const [rooms,          setRooms]          = useState([]);
   const [onlineTab,      setOnlineTab]      = useState("list");
   const [onlineSettings, setOnlineSettings] = useState({ ...PRESETS.normal, name: "ליל פוקר 🌐", maxPlayers: 6, password: "", rakePct: 0 });
+  const [rejoinLoading,  setRejoinLoading]  = useState(false);
   const [joinCode,       setJoinCode]       = useState("");
   const [joinPassword,   setJoinPassword]   = useState("");
   const [loading,        setLoading]        = useState(false);
@@ -127,9 +128,40 @@ export function LobbyScreen({ onStart, onStartOnline, onStats }) {
     }}>
       <span style={{ fontSize: 28, fontWeight: 900, color: "#C5A028", letterSpacing: 5, fontFamily: "Georgia,serif", marginBottom: 4 }}>VAULT</span>
       <span style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 12 }}>POKER</span>
-      <button onClick={onStats} style={{ fontSize: 10, color: "#888", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6, padding: "4px 14px", cursor: "pointer", marginBottom: 16, fontWeight: 600 }}>
+      <button onClick={onStats} style={{ fontSize: 10, color: "#888", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6, padding: "4px 14px", cursor: "pointer", marginBottom: lastRoom ? 8 : 16, fontWeight: 600 }}>
         📊 לוח מובילים
       </button>
+
+      {/* ── באנר חזרה לשולחן ── */}
+      {lastRoom && (
+        <div style={{ width: "100%", maxWidth: 400, background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#22C55E" }}>🔄 יצאת בטעות?</div>
+            <div style={{ fontSize: 9, color: "#888", marginTop: 2 }}>שולחן: <b style={{ color: "#C5A028", fontFamily: "Georgia,serif" }}>{lastRoom.roomId}</b> · {lastRoom.playerName}</div>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              disabled={rejoinLoading}
+              onClick={() => {
+                setRejoinLoading(true);
+                socket.emit('join_room', { roomId: lastRoom.roomId, playerName: lastRoom.playerName }, (res) => {
+                  setRejoinLoading(false);
+                  if (res?.success || res?.reconnected) {
+                    onStartOnline(lastRoom.roomId, false, lastRoom.playerName);
+                  } else {
+                    onClearLastRoom?.();
+                    setError(res?.error || "לא ניתן לחזור לשולחן");
+                    setMode("online");
+                  }
+                });
+              }}
+              style={{ background: "rgba(34,197,94,0.15)", border: "1px solid rgba(34,197,94,0.35)", borderRadius: 7, color: "#22C55E", padding: "5px 12px", fontSize: 11, cursor: "pointer", fontWeight: 800 }}>
+              {rejoinLoading ? "..." : "חזור ▶"}
+            </button>
+            <button onClick={onClearLastRoom} style={{ background: "transparent", border: "none", color: "#555", fontSize: 14, cursor: "pointer", padding: "0 4px" }}>✕</button>
+          </div>
+        </div>
+      )}
 
       {/* ── Mode tabs: Offline / Online ── */}
       <div style={{ display: "flex", gap: 0, marginBottom: 20, borderRadius: 10, overflow: "hidden", border: "1px solid rgba(184,150,12,0.15)" }}>

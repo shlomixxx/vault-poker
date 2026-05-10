@@ -8,6 +8,7 @@ const cors    = require('cors');
 const { Server } = require('socket.io');
 
 const db          = require('./db');
+const logger      = require('./logger');
 const adminRouter = require('./routes/admin');
 const statsRouter = require('./routes/stats');
 const engine      = require('./game/engine');
@@ -29,6 +30,14 @@ app.use(express.json());
 
 // ── Health check ──────────────────────────────────────────────────────────
 app.get('/api/health', (_, res) => res.json({ ok: true, uptime: process.uptime() }));
+
+// ── Logs endpoint (admin-protected) ────────────────────────────────────────
+app.get('/api/logs', (req, res) => {
+  if (req.query.password !== db.getAdminPassword()) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  res.json(logger.getLogs(+req.query.n || 200));
+});
 
 app.use('/api/admin', adminRouter);
 app.use('/api/stats', statsRouter);
@@ -69,10 +78,15 @@ function genCode() {
 
 // ── Broadcast helpers ──────────────────────────────────────────────────────
 function broadcastRoom(room) {
-  for (const [name, sid] of Object.entries(room.socketMap)) {
+  const map   = room.socketMap;
+  const total = Object.keys(map).length;
+  let   sent  = 0;
+  for (const [name, sid] of Object.entries(map)) {
     const sock = io.sockets.sockets.get(sid);
-    if (sock) sock.emit('game_state', engine.stateForPlayer(room, name));
+    if (sock) { sock.emit('game_state', engine.stateForPlayer(room, name)); sent++; }
+    else       logger.warn('broadcast', `socket לא נמצא לשחקן`, { room: room.id, name, sid });
   }
+  logger.info('broadcast', `שלח game_state`, { room: room.id, sent, total, phase: room.state.phase });
 }
 
 function broadcastToRoom(room, event, data) {
@@ -140,6 +154,7 @@ io.on('connection', socket => {
   let myRoomId   = null;
   let myName     = null;
   let isSpectator = false;
+  logger.info('socket', 'חיבור חדש', { sid: socket.id });
 
   // ─ List rooms (open to join + in-progress to spectate) — private rooms excluded ─
   socket.on('list_rooms', cb => {
@@ -164,7 +179,7 @@ io.on('connection', socket => {
     myName   = playerName;
     socket.emit('game_state', engine.stateForPlayer(room, playerName));
     if (cb) cb({ success:true, roomId:id });
-    console.log(`[room] ${id} created by ${playerName}`);
+    logger.info('room', 'נוצר חדר', { roomId: id, playerName, sid: socket.id });
   });
 
   // ─ Join room (with reconnect support) ─
@@ -175,6 +190,7 @@ io.on('connection', socket => {
     // אם השחקן כבר קיים בחדר — תמיד treat כ-reconnect (גם אם connected=true, שמשמעו socket ישן)
     const existing = room.state.players.find(p => p.name === playerName);
     if (existing) {
+      const wasConnected = existing.connected;
       existing.connected = true;
       room.socketMap[playerName] = socket.id;
       socket.join(roomId);
@@ -185,18 +201,21 @@ io.on('connection', socket => {
         broadcastToRoom(room, 'player_reconnected', { playerName });
       }
       cb?.({ success:true, reconnected:true });
-      console.log(`[room] ${playerName} reconnected to ${roomId}`);
+      logger.info('room', wasConnected ? 'חיבור מחדש (socket חדש)' : 'חיבור מחדש (לאחר ניתוק)', { roomId, playerName, sid: socket.id });
       return;
     }
 
     // בדיקת סיסמה עבור שחקן חדש
     if (room.settings.password && room.settings.password !== password) {
+      logger.warn('room', 'סיסמה שגויה', { roomId, playerName });
       cb?.({ success:false, error:'סיסמה שגויה' }); return;
     }
     if (room.state.phase !== 'waiting') {
+      logger.warn('room', 'ניסיון הצטרפות לחדר פעיל', { roomId, playerName, phase: room.state.phase });
       cb?.({ success:false, error:'המשחק כבר התחיל — אפשר לצפות בלבד' }); return;
     }
     if (room.state.players.length >= room.settings.maxPlayers) {
+      logger.warn('room', 'חדר מלא', { roomId, playerName });
       cb?.({ success:false, error:'השולחן מלא' }); return;
     }
 
@@ -207,7 +226,7 @@ io.on('connection', socket => {
     broadcastRoom(room);
     broadcastToRoom(room, 'player_joined', { playerName, seatIdx: room.state.players.length-1 });
     cb?.({ success:true });
-    console.log(`[room] ${playerName} joined ${roomId}`);
+    logger.info('room', 'שחקן הצטרף', { roomId, playerName, sid: socket.id, totalPlayers: room.state.players.length });
   });
 
   // ─ Spectate room ─
@@ -225,8 +244,9 @@ io.on('connection', socket => {
   // ─ Start game (any player can trigger when ≥2 players) ─
   socket.on('start_game', cb => {
     const room = rooms.get(myRoomId);
-    if (!room) { cb?.({ success:false, error:'חדר לא קיים' }); return; }
+    if (!room) { logger.error('game', 'start_game: חדר לא נמצא', { myRoomId, sid: socket.id }); cb?.({ success:false, error:'חדר לא קיים' }); return; }
     if (room.state.players.length < 2) { cb?.({ success:false, error:'נדרשים לפחות 2 שחקנים כדי להתחיל' }); return; }
+    logger.info('game', 'משחק מתחיל', { roomId: myRoomId, players: room.state.players.map(p => p.name), socketMap: room.socketMap });
     handActionLogs.delete(myRoomId);
     engine.buildHand(room, db.getWinBoosts());
     io.to(myRoomId).emit('action_event', { type: 'new_hand', handNum: room.state.handNum });
@@ -239,10 +259,14 @@ io.on('connection', socket => {
   // ─ Player action ─
   socket.on('action', ({ type, amount }) => {
     const room = rooms.get(myRoomId);
-    if (!room || !myName || isSpectator) return;
+    if (!room || !myName || isSpectator) {
+      logger.warn('action', 'פעולה נדחתה', { myName, myRoomId, isSpectator, sid: socket.id }); return;
+    }
     const s = room.state;
     const playerIdx = s.players.findIndex(p => p.name === myName);
-    if (playerIdx !== s.turn) return;
+    if (playerIdx !== s.turn) {
+      logger.warn('action', 'לא התור של השחקן', { myName, turn: s.turn, playerIdx }); return;
+    }
     if (s.phase === 'showdown' || s.phase === 'waiting') return;
 
     appendAction(myRoomId, { playerName: myName, action: type, amount: amount || 0, phase: s.phase });
@@ -296,7 +320,8 @@ io.on('connection', socket => {
   });
 
   // ─ Disconnect ─
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
+    logger.info('socket', 'ניתוק', { sid: socket.id, myName, myRoomId, reason });
     const room = rooms.get(myRoomId);
     if (!room) return;
     if (isSpectator) return; // spectators don't affect the game
