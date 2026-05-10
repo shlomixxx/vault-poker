@@ -28,8 +28,9 @@ export function LobbyScreen({ onStart, onStartOnline, onStats }) {
   const [playerName,     setPlayerName]     = useState("");
   const [rooms,          setRooms]          = useState([]);
   const [onlineTab,      setOnlineTab]      = useState("list");
-  const [onlineSettings, setOnlineSettings] = useState({ ...PRESETS.normal, name: "ליל פוקר 🌐", maxPlayers: 6 });
+  const [onlineSettings, setOnlineSettings] = useState({ ...PRESETS.normal, name: "ליל פוקר 🌐", maxPlayers: 6, password: "", rakePct: 0 });
   const [joinCode,       setJoinCode]       = useState("");
+  const [joinPassword,   setJoinPassword]   = useState("");
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState(null);
   const [copiedLink,     setCopiedLink]     = useState(false);
@@ -85,7 +86,7 @@ export function LobbyScreen({ onStart, onStartOnline, onStats }) {
     if (!code.trim()) { setError("הזן קוד חדר"); return; }
     setError(null);
     setLoading(true);
-    socket.emit('join_room', { roomId: code.trim().toUpperCase(), playerName: name }, (res) => {
+    socket.emit('join_room', { roomId: code.trim().toUpperCase(), playerName: name, password: joinPassword }, (res) => {
       setLoading(false);
       if (res?.success) { onStartOnline(code.trim().toUpperCase()); }
       else { setError(res?.error || "שגיאה בהצטרפות"); }
@@ -208,6 +209,11 @@ export function LobbyScreen({ onStart, onStartOnline, onStats }) {
                   placeholder="AB4C2F" maxLength={6}
                   style={{ ...inp, fontSize: 22, textAlign: "center", letterSpacing: 8, fontFamily: "Georgia,serif" }} />
               </div>
+              <div>
+                <label style={lbl}>🔒 סיסמה (אם נדרש)</label>
+                <input type="password" value={joinPassword} onChange={e => setJoinPassword(e.target.value)}
+                  placeholder="••••" style={inp} />
+              </div>
               <button onClick={() => handleJoin(joinCode)} disabled={loading || !joinCode} style={primaryBtn}>
                 {loading ? "מתחבר..." : "הצטרף 🔗"}
               </button>
@@ -257,6 +263,22 @@ export function LobbyScreen({ onStart, onStartOnline, onStats }) {
                 <label style={lbl}>⏱️ שניות לתור: <b style={{ color: "#E5C94B" }}>{onlineSettings.timer}s</b></label>
                 <input type="range" min={10} max={90} step={5} value={onlineSettings.timer}
                   onChange={e => setOL("timer", +e.target.value)} style={sliderStyle} />
+              </div>
+
+              <div>
+                <label style={lbl}>🏠 עמלת יוצר: <b style={{ color: "#E5C94B" }}>{onlineSettings.rakePct}%</b></label>
+                <input type="range" min={0} max={20} step={1} value={onlineSettings.rakePct}
+                  onChange={e => setOL("rakePct", +e.target.value)} style={sliderStyle} />
+                <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>
+                  {onlineSettings.rakePct > 0 ? `${onlineSettings.rakePct}% מכל קופה יועבר אליך` : "ללא עמלה"}
+                </div>
+              </div>
+
+              <div>
+                <label style={lbl}>🔒 סיסמה (ריק = ציבורי)</label>
+                <input type="password" value={onlineSettings.password}
+                  onChange={e => setOL("password", e.target.value)}
+                  placeholder="ריק = חדר ציבורי" style={inp} />
               </div>
 
               <button onClick={handleCreate} disabled={loading} style={primaryBtn}>

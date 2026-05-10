@@ -139,13 +139,13 @@ io.on('connection', socket => {
   let myName     = null;
   let isSpectator = false;
 
-  // ─ List rooms (open to join + in-progress to spectate) ─
+  // ─ List rooms (open to join + in-progress to spectate) — private rooms excluded ─
   socket.on('list_rooms', cb => {
     const list = [...rooms.values()]
-      .filter(r => r.state.phase === 'waiting' && r.state.players.length < r.settings.maxPlayers)
+      .filter(r => !r.settings.password && r.state.phase === 'waiting' && r.state.players.length < r.settings.maxPlayers)
       .map(r => ({ id:r.id, name:r.name, players:r.state.players.length, maxPlayers:r.settings.maxPlayers, phase:r.state.phase }));
     const spectatable = [...rooms.values()]
-      .filter(r => r.state.phase !== 'waiting')
+      .filter(r => !r.settings.password && r.state.phase !== 'waiting')
       .map(r => ({ id:r.id, name:r.name, players:r.state.players.length, maxPlayers:r.settings.maxPlayers, phase:r.state.phase, spectatable:true }));
     if (cb) cb([...list, ...spectatable]);
   });
@@ -154,6 +154,7 @@ io.on('connection', socket => {
   socket.on('create_room', ({ name, settings, playerName, avatar }, cb) => {
     const id   = genCode();
     const room = engine.createRoom(id, name || `שולחן ${id}`, settings);
+    room.rakeOwner = playerName; // creator collects rake
     engine.addPlayer(room, playerName, avatar, socket.id);
     rooms.set(id, room);
     socket.join(id);
@@ -165,9 +166,15 @@ io.on('connection', socket => {
   });
 
   // ─ Join room (with reconnect support) ─
-  socket.on('join_room', ({ roomId, playerName, avatar }, cb) => {
+  socket.on('join_room', ({ roomId, playerName, avatar, password }, cb) => {
     const room = rooms.get(roomId);
     if (!room) { cb?.({ success:false, error:'חדר לא נמצא' }); return; }
+
+    // Password check (skip for reconnecting players)
+    const isReconnect = room.state.players.find(p => p.name === playerName && !p.connected);
+    if (!isReconnect && room.settings.password && room.settings.password !== password) {
+      cb?.({ success:false, error:'סיסמה שגויה' }); return;
+    }
 
     // Reconnect: player was in this room and disconnected
     const existing = room.state.players.find(p => p.name === playerName);

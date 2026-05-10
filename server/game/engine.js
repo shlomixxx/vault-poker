@@ -172,11 +172,20 @@ function processAction(room, playerIdx, action, raiseAmount) {
   // Early win: everyone else folded
   const remaining = p.filter(x => !x.f);
   if (remaining.length === 1) {
-    const totalWin = s.pot + nb.reduce((a,b)=>a+b,0);
-    const winIdx   = p.indexOf(remaining[0]);
-    p[winIdx].ch  += totalWin;
-    room.state = { ...s, phase:'showdown', players:p, bets:new Array(n).fill(0), pot:0, acted:[...na], curBet:newCurBet, contributions:nc, winner:{ idx:winIdx, name:p[winIdx].name, hand:'כולם עשו Fold', bestCards:[], amount:totalWin }, handResults:[] };
-    _logHand(room, p[winIdx].name, totalWin, false);
+    const rawWin  = s.pot + nb.reduce((a,b)=>a+b,0);
+    const rakePct = room.settings?.rakePct || 0;
+    const rakeAmt = rakePct > 0 ? Math.floor(rawWin * rakePct / 100) : 0;
+    const netWin  = rawWin - rakeAmt;
+    const winIdx  = p.indexOf(remaining[0]);
+    p[winIdx].ch += netWin;
+    if (rakeAmt > 0 && room.rakeOwner) {
+      const ri = p.findIndex(pl => pl.name === room.rakeOwner);
+      if (ri >= 0) p[ri].ch += rakeAmt;
+    }
+    room.state = { ...s, phase:'showdown', players:p, bets:new Array(n).fill(0), pot:0, acted:[...na], curBet:newCurBet, contributions:nc,
+      winner:{ idx:winIdx, name:p[winIdx].name, hand:'כולם עשו Fold', bestCards:[], amount:netWin,
+        rake: rakeAmt > 0 ? { amount:rakeAmt, owner:room.rakeOwner } : null }, handResults:[] };
+    _logHand(room, p[winIdx].name, rawWin, false);
     return { handOver:true };
   }
 
@@ -219,15 +228,39 @@ function advancePhase(room) {
       return evaluateHand(p.c, s.board);
     });
 
+    // Compute rake before distributing pots
+    const rakePct = room.settings?.rakePct || 0;
+    const rakeAmt = rakePct > 0 ? Math.floor(totalPot * rakePct / 100) : 0;
+    const netPot  = totalPot - rakeAmt;
+
     // Use contributions for side-pot computation; fall back to equal split if missing
-    const contribs = s.contributions && s.contributions.some(c=>c>0)
+    const rawContribs = s.contributions && s.contributions.some(c=>c>0)
       ? s.contributions
       : new Array(n).fill(Math.round(totalPot / n));
+
+    // Scale contributions proportionally to netPot so distributed amount = netPot
+    let contribs = rawContribs;
+    if (rakeAmt > 0 && totalPot > 0) {
+      contribs = rawContribs.map(c => Math.floor(c * netPot / totalPot));
+      // Fix rounding by adding remainder to first eligible player
+      const scaledSum = contribs.reduce((a,b)=>a+b,0);
+      const gap = netPot - scaledSum;
+      if (gap > 0) {
+        const fi = s.players.findIndex((p,i) => !p.f && results[i]);
+        if (fi >= 0) contribs[fi] += gap;
+      }
+    }
 
     const pots          = computePots(contribs, s.players);
     const { winnings, summary } = awardPots(pots, results);
 
     const wp = s.players.map((p,i) => ({ ...p, ch: p.ch + (winnings[i]||0) }));
+
+    // Award rake to room creator
+    if (rakeAmt > 0 && room.rakeOwner) {
+      const ri = wp.findIndex(p => p.name === room.rakeOwner);
+      if (ri >= 0) wp[ri].ch += rakeAmt;
+    }
 
     // Main winner = winner of the main pot (first pot = best hand eligible by all)
     const mainIdx = summary.length > 0 ? summary[0].winners[0] : -1;
@@ -240,6 +273,7 @@ function advancePhase(room) {
       bestCards:results[mainIdx]?.bestCards || [],
       amount:   winnings[mainIdx],
       potSummary: summary,   // [{amount, winners, isSplit}]
+      rake: rakeAmt > 0 ? { amount:rakeAmt, owner:room.rakeOwner } : null,
     } : null;
 
     room.state = { ...base, players:wp, pot:0, handResults:results, winner };
@@ -296,6 +330,7 @@ function stateForPlayer(room, viewerName) {
     pkey:        s.pkey,
     handNum:     s.handNum,
     potSummary:  s.winner?.potSummary || [],
+    rakeOwner:   room.rakeOwner || null,
   };
 }
 
@@ -327,6 +362,7 @@ function stateForSpectator(room) {
     pkey:        s.pkey,
     handNum:     s.handNum,
     potSummary:  s.winner?.potSummary || [],
+    rakeOwner:   room.rakeOwner || null,
   };
 }
 

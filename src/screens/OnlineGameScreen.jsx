@@ -144,7 +144,7 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
     );
   }
 
-  const { myIdx=0, players, board, bets, pot, turn, curBet, phase, winner, handResults=[], dealerIdx, pkey, settings, handNum=0, potSummary=[] } = gs;
+  const { myIdx=0, players, board, bets, pot, turn, curBet, phase, winner, handResults=[], dealerIdx, pkey, settings, handNum=0, potSummary=[], rakeOwner=null } = gs;
   const phaseIdx    = PHASES.indexOf(phase);
   const revealCount = PH_REVEAL[phase] || 0;
   const isMyTurn    = !isSpectator && turn === myIdx;
@@ -191,6 +191,9 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
               <div style={{ background:'rgba(0,0,0,0.5)', borderRadius:12, padding:'4px 16px', border:'1px solid rgba(184,150,12,0.1)', textAlign:'center' }}>
                 <div style={{ fontSize:7, color:'#999', letterSpacing:2 }}>POT</div>
                 <div style={{ fontSize:20, fontWeight:900, color:'#E5C94B', fontFamily:'Georgia,serif', lineHeight:1 }}>{totalPot.toLocaleString()}</div>
+                {(settings?.rakePct > 0) && (
+                  <div style={{ fontSize:7, color:'#666', marginTop:1 }}>🏠 {settings.rakePct}% עמלה</div>
+                )}
               </div>
             </div>
             {/* Community cards */}
@@ -310,6 +313,11 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
           {(gs.potSummary||[]).length===1 && gs.potSummary[0]?.isSplit && (
             <div style={{ marginTop:6, textAlign:'center', fontSize:9, color:'#C5A028' }}>
               תיקו — הקופה מתחלקת בין {gs.potSummary[0].winners.map(wi=>players[wi]?.n).join(' ו')}
+            </div>
+          )}
+          {winner.rake?.amount > 0 && (
+            <div style={{ marginTop:6, textAlign:'center', fontSize:9, color:'#888', borderTop:'1px solid rgba(255,255,255,0.06)', paddingTop:5 }}>
+              🏠 עמלה: <span style={{ color:'#E5C94B', fontWeight:800 }}>{winner.rake.amount.toLocaleString()}</span> → {winner.rake.owner}
             </div>
           )}
         </div>
