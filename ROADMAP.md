@@ -2,6 +2,10 @@
 
 > Full-stack multiplayer Texas Hold'em in React + Node.js/Socket.io
 
+**🌐 Live:** https://vault-poker-production.up.railway.app  
+**GitHub:** https://github.com/shlomixxx/vault-poker  
+**Admin Panel:** `/admin` (password: set via `ADMIN_PASSWORD` env var)
+
 ---
 
 ## Current Stack
@@ -38,51 +42,48 @@ Core poker engine and basic UI.
 
 Everything needed to play with real friends over the internet.
 
-### 2.1 Deploy Infrastructure
+### 2.1 Deploy Infrastructure ✅
 - [x] Git repository initialized
-- [x] GitHub repo created
-- [ ] `railway.json` — one-click Railway deploy
-- [ ] `render.yaml` — one-click Render deploy
-- [ ] Server serves built React app (`dist/`) in production
-- [ ] `VITE_SERVER_URL` handled for same-origin production
-- [ ] `/api/health` endpoint for uptime monitoring
-- [ ] `.env.example` with all required variables
+- [x] GitHub repo created → https://github.com/shlomixxx/vault-poker
+- [x] `railway.json` — one-click Railway deploy
+- [x] `render.yaml` — one-click Render deploy
+- [x] Server serves built React app (`dist/`) in production
+- [x] `VITE_SERVER_URL` handled for same-origin production
+- [x] `/api/health` endpoint for uptime monitoring
+- [x] **Deployed live → https://vault-poker-production.up.railway.app**
 
-### 2.2 Room Link Sharing
-- [ ] `?room=XXXXX` URL parameter — auto-joins on load
-- [ ] "Copy Link" button after room creation
-- [ ] Share via native share API on mobile
-- [ ] Room code shown prominently in game
+### 2.2 Room Link Sharing ✅
+- [x] `?room=XXXXX` URL parameter — auto-joins on load
+- [x] "Copy Link" / 🔗 button with native share API on mobile
+- [x] Room code shown prominently in game top bar
 
-### 2.3 Reconnect Logic
-- [ ] Player reconnects with same name → restores their seat
-- [ ] Reconnect within 5 minutes of disconnect (room kept alive)
-- [ ] Toast notification when player reconnects
-- [ ] Disconnected player shown as greyed out (not removed immediately)
+### 2.3 Reconnect Logic ✅
+- [x] Player reconnects with same name → restores their seat
+- [x] Reconnect within 5 minutes of disconnect (room kept alive)
+- [x] Toast notification when player reconnects
+- [x] Disconnected player marked `connected: false` (not removed)
 
 ---
 
-## Phase 3 — Player Stats & History 📊 Planned
+## Phase 3 — Player Stats & History 📊 ✅ Complete
 
 Give every player their own statistics and history.
 
-### 3.1 Stats Screen (Public)
-- [ ] Leaderboard — all players ranked by wins
-- [ ] Per-player stats: wins, hands played, chips won, win rate
-- [ ] Best hand ever achieved
-- [ ] Biggest pot won
-- [ ] Access via `/stats` route and lobby button
+### 3.1 Stats Screen (Public) ✅
+- [x] Leaderboard — all players ranked by wins with win-rate bar
+- [x] Per-player stats: wins, hands played, chips won, win rate, biggest pot
+- [x] Access via "📊 לוח מובילים" button in lobby
+- [x] `/api/stats` public REST endpoint
 
-### 3.2 Action Log (Server)
-- [ ] Save every action per hand: `{ playerName, action, amount, phase }`
-- [ ] Save board cards and hole cards per hand
-- [ ] Save all player results per hand
-- [ ] Extend `handHistory` schema in `db.js`
+### 3.2 Action Log (Server) ✅
+- [x] Save every action per hand: `{ playerName, action, amount, phase }`
+- [x] Save board cards per hand
+- [x] Extend `handHistory` schema in `db.js`
 
-### 3.3 Hand History (Per Player)
-- [ ] Player searches by name → sees all their hands
-- [ ] Each hand shows: date, result (W/L), pot, hand type, amount won/lost
-- [ ] Filter by date range, hand type, room
+### 3.3 Hand History (Per Player) ✅
+- [x] Player searches by name → sees last 30 hands
+- [x] Each hand shows: date, result (W/L), pot, hand type, amount won/lost
+- [x] `/api/stats/:name` endpoint
 
 ---
 
@@ -97,22 +98,21 @@ Watch any past hand play out card by card.
 
 ---
 
-## Phase 5 — Social Features 💬 Planned
+## Phase 5 — Social Features 💬 ✅ Complete
 
 Make the game feel alive with communication.
 
-### 5.1 In-Game Chat
-- [ ] Text messages visible to all players in room
-- [ ] Emoji quick-reactions (👍 😮 🤑 💀)
-- [ ] Chat history visible in sidebar
-- [ ] Admin can mute players
+### 5.1 In-Game Chat ✅
+- [x] Text messages visible to all players + spectators in room
+- [x] Unread messages badge on chat button
+- [x] Sender name shown per message
 
-### 5.2 Spectator Mode
-- [ ] Join a room in progress as a spectator (no seat)
-- [ ] See community cards, pot, and all bets
-- [ ] See hole cards at showdown
-- [ ] Spectator count shown to players
-- [ ] Lobby shows "Spectate" button for in-progress rooms
+### 5.2 Spectator Mode ✅
+- [x] Join a room in progress as spectator (no seat)
+- [x] See community cards, pot, bets
+- [x] See hole cards at showdown
+- [x] Lobby shows 🔴 LIVE badge + "👁️ צפה" button for in-progress rooms
+- [x] Spectator label in top bar
 
 ---
 
@@ -212,4 +212,4 @@ NODE_ENV=production node server/index.js
 
 ---
 
-*Last updated: 2026-05-10*
+*Last updated: 2026-05-11*
