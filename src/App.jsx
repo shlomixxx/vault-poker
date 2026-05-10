@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SocketProvider } from "./context/SocketContext";
 import { LobbyScreen }    from "./screens/LobbyScreen";
 import { GameScreen }     from "./screens/GameScreen";
 import { OnlineGameScreen } from "./screens/OnlineGameScreen";
 import { AdminScreen }    from "./screens/AdminScreen";
 import { StatsScreen }    from "./screens/StatsScreen";
+
+const SESSION_KEY = 'vaultPokerLastGame';
 
 function AppRouter() {
   const [screen, setScreen] = useState(() =>
@@ -16,10 +18,34 @@ function AppRouter() {
   const [activePlayerName, setActivePlayerName] = useState('');
   const [lastRoom,         setLastRoom]         = useState(null); // { roomId, playerName }
 
+  // Restore lastRoom from sessionStorage on refresh
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(SESSION_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.roomId && parsed?.playerName) {
+          setLastRoom(parsed);
+        }
+      }
+    } catch {}
+  }, []);
+
+  const saveSession = (roomId, playerName) => {
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ roomId, playerName })); } catch {}
+  };
+  const clearSession = () => {
+    try { sessionStorage.removeItem(SESSION_KEY); } catch {}
+  };
+
   const goLobby = (fromGame = false) => {
     window.history.pushState({}, '', '/');
     if (fromGame && activeRoomId && activePlayerName && !isSpectating) {
-      setLastRoom({ roomId: activeRoomId, playerName: activePlayerName });
+      const lr = { roomId: activeRoomId, playerName: activePlayerName };
+      setLastRoom(lr);
+      saveSession(lr.roomId, lr.playerName);
+    } else if (!fromGame) {
+      // Explicit lobby navigation (not from game exit) — keep lastRoom/session intact
     }
     setScreen('lobby');
     setActiveRoomId(null);
@@ -36,7 +62,14 @@ function AppRouter() {
     setIsSpectating(!!spectate);
     setActivePlayerName(playerName);
     setLastRoom(null);
+    // Persist session so page refresh can rejoin
+    if (!spectate && roomId && playerName) saveSession(roomId, playerName);
     setScreen('online');
+  };
+
+  const handleClearLastRoom = () => {
+    setLastRoom(null);
+    clearSession();
   };
 
   return (
@@ -45,7 +78,7 @@ function AppRouter() {
       onStartOnline={handleStartOnline}
       onStats={() => setScreen('stats')}
       lastRoom={lastRoom}
-      onClearLastRoom={() => setLastRoom(null)}
+      onClearLastRoom={handleClearLastRoom}
     />
   );
 }

@@ -294,43 +294,50 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
         </div>
       )}
 
-      {/* Winner banner */}
+      {/* Winner banner — compact for mobile */}
       {winner && (
-        <div style={{ width:'100%', maxWidth:680, background:'rgba(10,10,24,0.95)', border:'1px solid #C5A028', borderRadius:14, padding:'10px 16px', zIndex:25, backdropFilter:'blur(20px)', boxShadow:'0 0 30px rgba(184,150,12,0.25)', animation:'fadeInUp 0.4s ease', marginTop:4, direction:'ltr' }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <span style={{ fontSize:20 }}>🏆</span>
+        <div style={{ width:'100%', maxWidth:680, background:'rgba(10,10,24,0.97)', border:'1px solid #C5A028', borderRadius:12, padding:'8px 12px', zIndex:25, backdropFilter:'blur(20px)', boxShadow:'0 0 24px rgba(184,150,12,0.2)', animation:'fadeInUp 0.4s ease', marginTop:4, direction:'ltr' }}>
+          {/* Header row: name + hand + amount */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ fontSize:18 }}>🏆</span>
               <div>
-                <div style={{ fontSize:16, fontWeight:900, color:'#E5C94B', fontFamily:'Georgia,serif', lineHeight:1 }}>{winner.name}</div>
-                <div style={{ fontSize:11, color:'#FFF', fontWeight:700 }}>{winner.hand}</div>
-                {winner.handEn && <div style={{ fontSize:8, color:'#888' }}>{winner.handEn}</div>}
+                <div style={{ fontSize:15, fontWeight:900, color:'#E5C94B', fontFamily:'Georgia,serif', lineHeight:1 }}>{winner.name}</div>
+                <div style={{ fontSize:10, color:'#FFF', fontWeight:700, lineHeight:1.2 }}>
+                  {winner.hand}
+                  {winner.handEn ? <span style={{ color:'#666', fontWeight:400, marginRight:4 }}> · {winner.handEn}</span> : null}
+                </div>
               </div>
             </div>
-            <div style={{ fontSize:18, color:'#C5A028', fontWeight:900, fontFamily:'Georgia,serif' }}>+{(winner.amount||0).toLocaleString()} 💰</div>
+            <div style={{ fontSize:16, color:'#C5A028', fontWeight:900, fontFamily:'Georgia,serif', whiteSpace:'nowrap' }}>+{(winner.amount||0).toLocaleString()} 💰</div>
           </div>
-          {winner.bestCards?.length>0 && (
-            <div style={{ display:'flex', gap:3, marginTop:8, justifyContent:'center' }}>
-              {winner.bestCards.map((c,i) => <Card key={i} card={c} w={46} h={65} delay={i*80} highlight />)}
+
+          {/* Best cards — smaller on mobile */}
+          {winner.bestCards?.length > 0 && (
+            <div style={{ display:'flex', gap:3, marginTop:6, justifyContent:'center' }}>
+              {winner.bestCards.map((c,i) => <Card key={i} card={c} w={38} h={54} delay={i*60} highlight />)}
             </div>
           )}
+
+          {/* Pot summary — compact single-line per pot */}
           {(gs.potSummary||[]).length > 1 && (
-            <div style={{ marginTop:8, borderTop:'1px solid rgba(255,255,255,0.06)', paddingTop:6, display:'flex', flexDirection:'column', gap:3 }}>
-              {(gs.potSummary).map((pr,idx) => (
-                <div key={idx} style={{ display:'flex', justifyContent:'space-between', fontSize:9, color:'#888' }}>
-                  <span style={{ color:'#C5A028' }}>{idx===0?'Main Pot':`Side Pot ${idx}`} {pr.isSplit?'(תיקו)':''}</span>
-                  <span style={{ direction:'ltr' }}>+{pr.amount.toLocaleString()} {pr.winners.map(wi => players[wi]?.n||wi).join(' & ')}</span>
-                </div>
+            <div style={{ marginTop:6, borderTop:'1px solid rgba(255,255,255,0.06)', paddingTop:5, display:'flex', flexWrap:'wrap', gap:'2px 12px' }}>
+              {gs.potSummary.map((pr,idx) => (
+                <span key={idx} style={{ fontSize:9, color:'#888', direction:'ltr' }}>
+                  <span style={{ color:'#C5A028' }}>{idx===0?'Main':` Side${idx}`}{pr.isSplit?' ⇌':''}</span>
+                  {' '}+{pr.amount.toLocaleString()} {pr.winners.map(wi => players[wi]?.n||wi).join('&')}
+                </span>
               ))}
             </div>
           )}
           {(gs.potSummary||[]).length===1 && gs.potSummary[0]?.isSplit && (
-            <div style={{ marginTop:6, textAlign:'center', fontSize:9, color:'#C5A028' }}>
-              תיקו — הקופה מתחלקת בין {gs.potSummary[0].winners.map(wi=>players[wi]?.n).join(' ו')}
+            <div style={{ marginTop:4, textAlign:'center', fontSize:9, color:'#C5A028' }}>
+              ⇌ תיקו — {gs.potSummary[0].winners.map(wi=>players[wi]?.n).join(' ו')}
             </div>
           )}
           {winner.rake?.amount > 0 && (
-            <div style={{ marginTop:6, textAlign:'center', fontSize:9, color:'#888', borderTop:'1px solid rgba(255,255,255,0.06)', paddingTop:5 }}>
-              🏠 עמלה: <span style={{ color:'#E5C94B', fontWeight:800 }}>{winner.rake.amount.toLocaleString()}</span> → {winner.rake.owner}
+            <div style={{ marginTop:4, textAlign:'center', fontSize:9, color:'#888' }}>
+              🏠 <span style={{ color:'#E5C94B', fontWeight:800 }}>{winner.rake.amount.toLocaleString()}</span> עמלה → {winner.rake.owner}
             </div>
           )}
         </div>

@@ -62,14 +62,10 @@ export function Seat({ p, pos, isMe, showAll, bet, active, timerData, handResult
         </div>
       </div>
 
-      {/* Hand name badge at showdown */}
+      {/* Hand name — plain text only, no box (winner banner shows it prominently) */}
       {showAll && handResult && !p.f && (
-        <div style={{
-          background: isWinner ? "rgba(184,150,12,0.25)" : "rgba(0,0,0,0.5)",
-          borderRadius: 6, padding: "1px 6px", marginTop: 1,
-          border: `1px solid ${isWinner ? "rgba(184,150,12,0.4)" : "rgba(255,255,255,0.06)"}`,
-        }}>
-          <span style={{ fontSize: 7, fontWeight: 800, color: isWinner ? "#E5C94B" : "#999" }}>
+        <div style={{ marginTop: 1, textAlign: "center" }}>
+          <span style={{ fontSize: 7, fontWeight: 800, color: isWinner ? "#E5C94B" : "#777", textShadow: isWinner ? "0 0 6px rgba(184,150,12,0.5)" : "none" }}>
             {handResult.nameHe}
           </span>
         </div>
