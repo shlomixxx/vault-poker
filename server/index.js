@@ -172,27 +172,27 @@ io.on('connection', socket => {
     const room = rooms.get(roomId);
     if (!room) { cb?.({ success:false, error:'חדר לא נמצא' }); return; }
 
-    // Password check (skip for reconnecting players)
-    const isReconnect = room.state.players.find(p => p.name === playerName && !p.connected);
-    if (!isReconnect && room.settings.password && room.settings.password !== password) {
-      cb?.({ success:false, error:'סיסמה שגויה' }); return;
-    }
-
-    // Reconnect: player was in this room and disconnected
+    // אם השחקן כבר קיים בחדר — תמיד treat כ-reconnect (גם אם connected=true, שמשמעו socket ישן)
     const existing = room.state.players.find(p => p.name === playerName);
-    if (existing && !existing.connected) {
+    if (existing) {
       existing.connected = true;
       room.socketMap[playerName] = socket.id;
       socket.join(roomId);
       myRoomId = roomId;
       myName   = playerName;
       socket.emit('game_state', engine.stateForPlayer(room, playerName));
-      broadcastToRoom(room, 'player_reconnected', { playerName });
+      if (room.state.phase !== 'waiting') {
+        broadcastToRoom(room, 'player_reconnected', { playerName });
+      }
       cb?.({ success:true, reconnected:true });
       console.log(`[room] ${playerName} reconnected to ${roomId}`);
       return;
     }
 
+    // בדיקת סיסמה עבור שחקן חדש
+    if (room.settings.password && room.settings.password !== password) {
+      cb?.({ success:false, error:'סיסמה שגויה' }); return;
+    }
     if (room.state.phase !== 'waiting') {
       cb?.({ success:false, error:'המשחק כבר התחיל — אפשר לצפות בלבד' }); return;
     }

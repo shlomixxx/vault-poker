@@ -13,6 +13,7 @@ function AppRouter() {
   const [offlineSettings, setOfflineSettings] = useState(null);
   const [activeRoomId,    setActiveRoomId]    = useState(null);
   const [isSpectating,    setIsSpectating]    = useState(false);
+  const [activePlayerName, setActivePlayerName] = useState('');
 
   const goLobby = () => {
     window.history.pushState({}, '', '/');
@@ -24,14 +25,15 @@ function AppRouter() {
   if (screen === 'admin')   return <AdminScreen  onExit={goLobby} />;
   if (screen === 'stats')   return <StatsScreen  onExit={goLobby} />;
   if (screen === 'game')    return <GameScreen   settings={offlineSettings} onExit={goLobby} />;
-  if (screen === 'online')  return <OnlineGameScreen roomId={activeRoomId} isSpectator={isSpectating} onExit={goLobby} />;
+  if (screen === 'online')  return <OnlineGameScreen roomId={activeRoomId} isSpectator={isSpectating} playerName={activePlayerName} onExit={goLobby} />;
 
   return (
     <LobbyScreen
       onStart={s => { setOfflineSettings(s); setScreen('game'); }}
-      onStartOnline={(roomId, spectate = false) => {
+      onStartOnline={(roomId, spectate = false, playerName = '') => {
         setActiveRoomId(roomId || null);
         setIsSpectating(!!spectate);
+        setActivePlayerName(playerName);
         setScreen('online');
       }}
       onStats={() => setScreen('stats')}

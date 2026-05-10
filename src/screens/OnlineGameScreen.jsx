@@ -18,7 +18,7 @@ const SEAT_POSITIONS = [
   { bottom:"10%",  left:"85%" },
 ];
 
-export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
+export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '', onExit }) {
   const { socket, reconnecting } = useSocket();
   const [gs,         setGs]         = useState(null);
   const [raise,      setRaise]      = useState(40);
@@ -41,9 +41,14 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
   useEffect(() => {
     if (!socket) return;
 
-    // If spectating, emit spectate_room; otherwise request current state
+    // כל פעם שה-socket מתחבר מחדש: רשום מחדש בשרת כדי לעדכן את ה-socketMap
     if (isSpectator && roomId) {
       socket.emit('spectate_room', { roomId });
+    } else if (playerName && roomId) {
+      // join_room מטפל גם בהצטרפות ראשונה וגם ב-reconnect (מעדכן socket ID בשרת)
+      socket.emit('join_room', { roomId, playerName }, (res) => {
+        if (!res?.success && !res?.reconnected) socket.emit('get_state');
+      });
     } else {
       socket.emit('get_state');
     }
@@ -100,7 +105,7 @@ export function OnlineGameScreen({ roomId, isSpectator = false, onExit }) {
       socket.off('player_disconnected');
       socket.off('error');
     };
-  }, [socket, isSpectator, roomId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [socket, isSpectator, roomId, playerName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (chatOpen) { setUnread(0); chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }

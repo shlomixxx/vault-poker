@@ -88,7 +88,7 @@ export function LobbyScreen({ onStart, onStartOnline, onStats }) {
     setLoading(true);
     socket.emit('join_room', { roomId: code.trim().toUpperCase(), playerName: name, password: joinPassword }, (res) => {
       setLoading(false);
-      if (res?.success) { onStartOnline(code.trim().toUpperCase()); }
+      if (res?.success) { onStartOnline(code.trim().toUpperCase(), false, name); }
       else { setError(res?.error || "שגיאה בהצטרפות"); }
     });
   };
@@ -102,10 +102,9 @@ export function LobbyScreen({ onStart, onStartOnline, onStats }) {
     socket.emit('create_room', { name: onlineSettings.name, settings: onlineSettings, playerName: name }, (res) => {
       setLoading(false);
       if (res?.success) {
-        // Copy link to clipboard silently — no auto native-share dialog (causes AbortError)
         const url = `${window.location.origin}${window.location.pathname}?room=${res.roomId}`;
         navigator.clipboard.writeText(url).catch(() => {});
-        onStartOnline(res.roomId);
+        onStartOnline(res.roomId, false, name);
       } else {
         setError(res?.error || "שגיאה ביצירת חדר");
       }
@@ -189,7 +188,7 @@ export function LobbyScreen({ onStart, onStartOnline, onStats }) {
                       <button onClick={() => copyShareLink(r.id)} style={{ background: "rgba(184,150,12,0.08)", border: "1px solid rgba(184,150,12,0.15)", borderRadius: 7, color: "#C5A028", padding: "5px 10px", fontSize: 10, cursor: "pointer" }}>🔗</button>
                       {r.spectatable
                         ? <button onClick={() => { onStartOnline(r.id, true); }} disabled={loading} style={{ background: "rgba(100,100,255,0.1)", border: "1px solid rgba(100,100,255,0.25)", borderRadius: 7, color: "#9090FF", padding: "5px 10px", fontSize: 10, cursor: "pointer", fontWeight: 700 }}>👁️ צפה</button>
-                        : <button onClick={() => handleJoin(r.id)} disabled={loading} style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: 7, color: "#22C55E", padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>הצטרף</button>
+                        : <button onClick={() => handleJoin(r.id)} disabled={loading} style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: 7, color: "#22C55E", padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 700 }}>הצטרף →</button>
                       }
                     </div>
                   </div>
