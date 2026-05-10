@@ -87,7 +87,9 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
     };
 
     socket.on('game_state',          onState);
-    socket.on('spectator_state',     onState);
+    // spectator_state is only emitted to spectator sockets by the server —
+    // we still listen here in case this client is a spectator
+    if (isSpectator) socket.on('spectator_state', onState);
     socket.on('chat_message',        onChat);
     socket.on('action_event',        onActionEvent);
     socket.on('player_joined',       ({ playerName }) => showToast(`👋 ${playerName} הצטרף`));
