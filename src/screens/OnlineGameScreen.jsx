@@ -29,9 +29,13 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
   const [unread,     setUnread]     = useState(0);
   const [copiedLink, setCopiedLink] = useState(false);
   const [actionLog,  setActionLog]  = useState([]);
-  const raiseRef   = useRef(40);
-  const chatEndRef = useRef(null);
-  const prevPkeyRef = useRef(null);
+  const [timerRemaining, setTimerRemaining] = useState(0);
+  const [bankRemaining,  setBankRemaining]  = useState(0);
+  const [inBank,         setInBank]         = useState(false);
+  const raiseRef    = useRef(40);
+  const chatEndRef  = useRef(null);
+  const chatOpenRef = useRef(false);
+  useEffect(() => { chatOpenRef.current = chatOpen; }, [chatOpen]);
 
   const showToast = (msg, duration = 2500) => {
     setToast(msg);
@@ -67,7 +71,8 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
     };
     const onChat = (msg) => {
       setChatLog(prev => [...prev.slice(-49), msg]);
-      if (!chatOpen) setUnread(u => u + 1);
+      // Use ref to avoid stale closure — chatOpen might have changed since effect ran
+      if (!chatOpenRef.current) setUnread(u => u + 1);
     };
 
     const ACTION_LABELS = { FOLD:'Fold', CHECK:'Check', CALL:'Call', RAISE:'Raise', ALL_IN:'All In', ALL_IN_ENG:'All In' };
@@ -118,6 +123,43 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
   useEffect(() => {
     if (chatOpen) { setUnread(0); chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }
   }, [chatOpen, chatLog]);
+
+  // ── Turn timer (client-side countdown, restarts on each turn change) ─────
+  useEffect(() => {
+    const phase = gs?.phase;
+    const turn  = gs?.turn;
+    const timerSec = gs?.settings?.timer || 30;
+    const bankSec  = gs?.settings?.bank  || 0;
+
+    // Reset timer on phase changes that have no active player
+    if (!gs || phase === 'showdown' || phase === 'waiting' || gs.winner || turn === undefined || turn < 0) {
+      setTimerRemaining(0);
+      setBankRemaining(bankSec);
+      setInBank(false);
+      return;
+    }
+
+    setTimerRemaining(timerSec);
+    setBankRemaining(bankSec);
+    setInBank(false);
+
+    const id = setInterval(() => {
+      setTimerRemaining(prev => {
+        if (prev > 1) return prev - 1;
+        // Main timer exhausted — switch to bank mode
+        setInBank(ib => (!ib && bankSec > 0) ? true : ib);
+        return 0;
+      });
+      // Only decrement bank when we're already in bank mode
+      setInBank(ib => {
+        if (ib) setBankRemaining(br => br > 0 ? br - 1 : 0);
+        return ib;
+      });
+    }, 1000);
+
+    return () => clearInterval(id);
+    // Restart timer whenever turn/phase/pkey changes — pkey changes on each new street
+  }, [gs?.turn, gs?.phase, gs?.pkey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendAction = (type, amount) => {
     if (isSpectator) return;
@@ -219,19 +261,28 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
               {revealCount > 0 && <Community board={board} count={revealCount} pkey={pkey} highlightCards={phase==='showdown'?winnerCards:[]} />}
             </div>
             {/* Seats */}
-            {players.map((p, i) => (
-              <Seat key={i} p={p} pos={seats[i]}
-                isMe={!isSpectator && i===myIdx}
-                showAll={phase==='showdown'}
-                bet={(bets||[])[i]||0}
-                active={i===turn && !p.f && phase!=='showdown' && phase!=='waiting'}
-                timerData={null}
-                handResult={handResults[i]||null}
-                isWinner={winner?.idx===i}
-                isDealer={i===dealerIdx}
-                hideSelfCards={!isSpectator && i===myIdx}
-              />
-            ))}
+            {players.map((p, i) => {
+              const isActive = i===turn && !p.f && phase!=='showdown' && phase!=='waiting';
+              return (
+                <Seat key={i} p={p} pos={seats[i]}
+                  isMe={!isSpectator && i===myIdx}
+                  showAll={phase==='showdown'}
+                  bet={(bets||[])[i]||0}
+                  active={isActive}
+                  timerData={isActive ? {
+                    remaining: timerRemaining,
+                    total: settings?.timer || 30,
+                    bankRemaining,
+                    bankTotal: settings?.bank || 0,
+                    inBank,
+                  } : null}
+                  handResult={handResults[i]||null}
+                  isWinner={winner?.idx===i}
+                  isDealer={i===dealerIdx}
+                  hideSelfCards={!isSpectator && i===myIdx}
+                />
+              );
+            })}
           </div>
         </div>
 
