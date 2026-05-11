@@ -32,6 +32,7 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
   const [timerRemaining, setTimerRemaining] = useState(0);
   const [bankRemaining,  setBankRemaining]  = useState(0);
   const [inBank,         setInBank]         = useState(false);
+  const [nextHandIn,     setNextHandIn]     = useState(0);
   const raiseRef    = useRef(40);
   const chatEndRef  = useRef(null);
   const chatOpenRef = useRef(false);
@@ -89,6 +90,8 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
         addEntry(PHASE_LABELS[ev.phase] || ev.phase, 'phase');
       } else if (ev.type === 'showdown') {
         addEntry('— SHOWDOWN —', 'phase');
+      } else if (ev.type === 'blinds_up') {
+        addEntry(`📈 בליינדים עלו: ${ev.sb}/${ev.bb}`, 'phase');
       } else if (ev.sender) {
         const label = ACTION_LABELS[ev.type] || ev.type;
         const amt   = ev.amount > 0 ? ` ${ev.amount}` : '';
@@ -124,14 +127,24 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
     if (chatOpen) { setUnread(0); chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }
   }, [chatOpen, chatLog]);
 
-  // ── Turn timer (client-side countdown, restarts on each turn change) ─────
+  // Notify server when the tab is about to close (mobile-safe via pagehide).
+  // Without this, the seat stays "occupied" until the 60s socket timeout fires.
+  useEffect(() => {
+    if (!socket || isSpectator) return;
+    const onPageHide = () => { try { socket.emit('leave_room'); } catch {} };
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, [socket, isSpectator]);
+
+  // ── Turn timer (client-side countdown, synced to server deadline) ────────
+  // Uses server-sent `turnStartedAt` so reconnecting mid-turn shows the
+  // correct remaining time instead of resetting to a full timer.
   useEffect(() => {
     const phase = gs?.phase;
     const turn  = gs?.turn;
     const timerSec = gs?.settings?.timer || 30;
     const bankSec  = gs?.settings?.bank  || 0;
 
-    // Reset timer on phase changes that have no active player
     if (!gs || phase === 'showdown' || phase === 'waiting' || gs.winner || turn === undefined || turn < 0) {
       setTimerRemaining(0);
       setBankRemaining(bankSec);
@@ -139,27 +152,34 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
       return;
     }
 
-    setTimerRemaining(timerSec);
-    setBankRemaining(bankSec);
-    setInBank(false);
-
-    const id = setInterval(() => {
-      setTimerRemaining(prev => {
-        if (prev > 1) return prev - 1;
-        // Main timer exhausted — switch to bank mode
-        setInBank(ib => (!ib && bankSec > 0) ? true : ib);
-        return 0;
-      });
-      // Only decrement bank when we're already in bank mode
-      setInBank(ib => {
-        if (ib) setBankRemaining(br => br > 0 ? br - 1 : 0);
-        return ib;
-      });
-    }, 1000);
-
+    const startedAt = gs.turnStartedAt || Date.now();
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      if (elapsed < timerSec) {
+        setTimerRemaining(timerSec - elapsed);
+        setBankRemaining(bankSec);
+        setInBank(false);
+      } else {
+        setTimerRemaining(0);
+        const bankUsed = elapsed - timerSec;
+        setBankRemaining(Math.max(bankSec - bankUsed, 0));
+        setInBank(bankSec > 0);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-    // Restart timer whenever turn/phase/pkey changes — pkey changes on each new street
-  }, [gs?.turn, gs?.phase, gs?.pkey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gs?.turn, gs?.phase, gs?.pkey, gs?.turnStartedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Auto-new-hand countdown (server starts a new hand 15s after showdown) ─
+  useEffect(() => {
+    if (gs?.phase !== 'showdown') { setNextHandIn(0); return; }
+    setNextHandIn(15);
+    const id = setInterval(() => {
+      setNextHandIn(prev => (prev > 1 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [gs?.phase, gs?.handNum]);
 
   const sendAction = (type, amount) => {
     if (isSpectator) return;
@@ -185,7 +205,14 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
   const startGame = () => socket?.emit('start_game', (res) => {
     if (!res?.success) showToast(res?.error || 'שגיאה בהתחלת משחק');
   });
-  const newHand = () => socket?.emit('new_hand');
+  const toggleReady = (ready) => socket?.emit('player_ready', { ready });
+
+  // Explicit leave — tell the server so it can remove/auto-fold us,
+  // otherwise the seat stays on the table until socket disconnect.
+  const handleExit = () => {
+    if (!isSpectator && socket?.connected) socket.emit('leave_room');
+    onExit();
+  };
 
   // ── Loading / waiting ──
   if (!gs) {
@@ -225,7 +252,7 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
 
       {/* Top bar */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', width:'100%', maxWidth:900, padding:'8px 10px 2px', zIndex:20 }}>
-        <button onClick={onExit} style={{ ...hb, color:'#888' }}>← יציאה</button>
+        <button onClick={handleExit} style={{ ...hb, color:'#888' }}>← יציאה</button>
         <div style={{ display:'flex', alignItems:'center', gap:6 }}>
           <span style={{ fontSize:14, fontWeight:900, color:'#C5A028', letterSpacing:2, fontFamily:'Georgia,serif' }}>VAULT</span>
           <div style={{ background:phase==='showdown'?'rgba(184,150,12,0.2)':'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.06)', borderRadius:6, padding:'2px 8px', fontSize:9, fontWeight:800, color:phase==='showdown'?'#E5C94B':'#888', letterSpacing:1 }}>{PH_LABEL[phase]||phase}</div>
@@ -460,9 +487,33 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
             </div>
           </>
         ) : (
-          <div style={{ display:'flex', justifyContent:'center', gap:8, marginTop:4 }}>
-            {!isSpectator && <button onClick={newHand} style={{ background:'rgba(34,197,94,0.1)', border:'1px solid rgba(34,197,94,0.25)', borderRadius:8, color:'#22C55E', padding:'7px 20px', fontSize:11, cursor:'pointer', fontWeight:700 }}>🔄 יד חדשה</button>}
-            <button onClick={onExit} style={{ background:'rgba(255,68,68,0.1)', border:'1px solid rgba(255,68,68,0.2)', borderRadius:8, color:'#FF4444', padding:'7px 20px', fontSize:11, cursor:'pointer', fontWeight:700 }}>🚪 יציאה</button>
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, marginTop:4 }}>
+            {!isSpectator && (() => {
+              const myName = players[myIdx]?.name;
+              const ready  = (gs.readyForNext || []);
+              const eligible = players.filter(p => p.connected && !p.left).map(p => p.name);
+              const iAmReady = !!myName && ready.includes(myName);
+              const readyCount = ready.filter(n => eligible.includes(n)).length;
+              return (
+                <>
+                  <button
+                    onClick={() => toggleReady(!iAmReady)}
+                    style={{
+                      background: iAmReady ? 'rgba(34,197,94,0.25)' : 'rgba(34,197,94,0.1)',
+                      border: `1px solid ${iAmReady ? '#22C55E' : 'rgba(34,197,94,0.25)'}`,
+                      borderRadius:8, color:'#22C55E', padding:'7px 20px',
+                      fontSize:11, cursor:'pointer', fontWeight:700, minWidth:170,
+                    }}>
+                    {iAmReady ? '✓ מוכן' : '🃏 אני מוכן'} ({readyCount}/{eligible.length})
+                    {nextHandIn > 0 ? ` · ${nextHandIn}s` : ''}
+                  </button>
+                  <button onClick={handleExit} style={{ background:'rgba(255,68,68,0.1)', border:'1px solid rgba(255,68,68,0.2)', borderRadius:8, color:'#FF4444', padding:'5px 14px', fontSize:10, cursor:'pointer', fontWeight:700 }}>🚪 יציאה</button>
+                </>
+              );
+            })()}
+            {isSpectator && (
+              <button onClick={handleExit} style={{ background:'rgba(255,68,68,0.1)', border:'1px solid rgba(255,68,68,0.2)', borderRadius:8, color:'#FF4444', padding:'7px 20px', fontSize:11, cursor:'pointer', fontWeight:700 }}>🚪 יציאה</button>
+            )}
           </div>
         )}
       </div>

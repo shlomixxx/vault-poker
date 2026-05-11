@@ -215,6 +215,15 @@ export function LobbyScreen({ onStart, onStartOnline, onStats, lastRoom = null, 
                         קוד: <b style={{ color: "#C5A028", fontFamily: "Georgia,serif" }}>{r.id}</b> · {r.players}/{r.maxPlayers} שחקנים
                         {r.spectatable && <span style={{ marginRight: 6, color: "#7C7CFF" }}>· 🔴 LIVE</span>}
                       </div>
+                      {r.settings && (
+                        <div style={{ fontSize: 10, color: "#888", marginTop: 3, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <span>💰 {Number(r.settings.buyIn || 0).toLocaleString()}</span>
+                          <span>🎯 {r.settings.sb}/{r.settings.bb}</span>
+                          <span>⏱️ {r.settings.timer}s</span>
+                          {r.settings.rakePct > 0 && <span style={{ color: "#C5A028" }}>💎 {r.settings.rakePct}%</span>}
+                          {r.settings.blindsUp && <span style={{ color: "#E5C94B" }}>📈 בליינדים עולים</span>}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: "flex", gap: 4 }}>
                       <button onClick={() => copyShareLink(r.id)} style={{ background: "rgba(184,150,12,0.08)", border: "1px solid rgba(184,150,12,0.15)", borderRadius: 7, color: "#C5A028", padding: "5px 10px", fontSize: 10, cursor: "pointer" }}>🔗</button>

@@ -1,182 +1,177 @@
 # VAULT Poker — דוח משימות ובאגים
 
-עדכון אחרון: 2026-05-11
+עדכון אחרון: 2026-05-12
+
+מקרא: ✅ הושלם · ⬜ פתוח · 🚧 חלקי / לאמת
 
 ---
 
-## 🔴 P0 — חקריטי (שוברי משחק)
-
-### 1. `spectator_state` דורס את קלפי השחקן
-**בעיה:** `broadcastSpectatorsInRoom` שולח `spectator_state` ל-**כולם** בחדר, כולל שחקנים.
-`OnlineGameScreen` מאזין לשניהם (`game_state` ו-`spectator_state`) עם אותה פונקציה `onState = state => setGs(state)`.
-אם `spectator_state` מגיע **אחרי** `game_state` — השחקן רואה `['??','??']` במקום הקלפים שלו.
-
-**קובץ:** `server/index.js:117`, `src/screens/OnlineGameScreen.jsx:90`
-
-**פתרון:** להסיר את `socket.on('spectator_state', onState)` מהשחקן הרגיל, או לשלוח `spectator_state` רק לצופים (מחזיקים ברשימה נפרדת).
-
----
-
-### 2. אין התמדת חדרים — כל server restart מוחק משחקים פעילים
-**בעיה:** `const rooms = new Map()` — כל ה-state בזיכרון. Railway מפעיל מחדש בכל deploy. שחקנים מאמצע משחק מוצאים חדר ריק.
-
-**קובץ:** `server/index.js:56`
-
-**פתרון:** לשמור snapshot של state החדר ב-SQLite (דרך `db.js` הקיים) בכל שינוי phase, ולשחזר חדרים פעילים בעת startup.
-
----
-
-### 3. "יד חדשה" — כל שחקן יכול להתחיל לבד בלי שאחרים מוכנים
-**בעיה:** כל שחקן שלוחץ "יד חדשה" מתחיל מיד. שחקן שלא ראה את הסיכום עדיין ייכנס לסבב חדש.
-
-**קובץ:** `server/index.js:309`, `src/screens/OnlineGameScreen.jsx:138`
-
-**פתרון:** לדרוש שכל השחקנים (שמחוברים) ילחצו "מוכן". רק כשכולם מוכנים — `buildHand`.
-
----
-
-### 4. שחקן שיצא נשאר בשולחן ומקבל קלפים
-**בעיה:** אין event של `leave_room`. כששחקן לוחץ "יציאה" הוא עובר ללובי, אבל בשרת הוא עדיין ב-`room.state.players`. בסבובים הבאים הוא מקבל קלפים, הטיימר רץ, ו-auto-fold מתבצע עבורו — עד שיתנתק לגמרי.
-
-**קובץ:** `server/index.js:323` (disconnect בלבד)
-
-**פתרון:** להוסיף event `leave_room` שמסיר את השחקן מ-`players` (אם phase=waiting) או מסמן אותו כ-"out" עם auto-fold לכל שאר הסבוב.
-
----
-
-## 🟡 P1 — חשוב (משפיע על חוויה)
-
-### 5. אין טיימר ויזואלי במשחק אונליין
-**בעיה:** `GameScreen` (אופליין) מציג countdown animation. `OnlineGameScreen` לא — השחקן לא רואה כמה זמן נשאר לו.
-
-**קובץ:** `src/screens/OnlineGameScreen.jsx` (חסר לחלוטין)
-
-**פתרון:** השרת כבר שולח `settings.timer`. להוסיף `useEffect` שמריץ countdown מקומי כשמגיע `action_event` מסוג `new_hand` / `phase`, ולאפס אותו בכל action. להציג progress bar מעל כפתורי הפעולה.
-
----
-
-### 6. המשחק תקוע בשולחן אם שחקן מתנתק בזמן showdown
-**בעיה:** אחרי showdown, צריך לחכות שמישהו ילחץ "יד חדשה". אם הנוכחות מחוברת רק 1 שחקן — אחרים לא יכולים לאלץ התחלה.
-
-**קובץ:** `server/index.js:309`
-
-**פתרון:** הוסף auto-timer של ~15 שניות: אם אף אחד לא לחץ "יד חדשה" — השרת קורא `engine.rotateDealerForNewHand` + `engine.buildHand` ומשדר.
-
----
-
-### 7. Blinds עולים — feature קיים בהגדרות אך לא ממומש
-**בעיה:** `settings.blindsUp = true` קיים בלובי עם toggle, אך `engine.js` ו-`index.js` מתעלמים ממנו לחלוטין.
-
-**קובץ:** `server/game/engine.js:buildHand`
-
-**פתרון:** בתחילת כל hand, אם `blindsUp` מופעל — להעלות SB/BB ב-25% כל X ידות (למשל כל 5 ידות).
-
----
-
-### 8. חדרי lobby לא מציגים הגדרות
-**בעיה:** רשימת החדרים מציגה רק שם + ספירת שחקנים. אין מידע על buy-in, blinds, או עמלה — קשה לבחור שולחן.
-
-**קובץ:** `src/screens/LobbyScreen.jsx:209`
-
-**פתרון:** להוסיף שורת info: `💰 1000 · 🎯 10/20 · ⏱️ 30s` לכל חדר ברשימה. השרת כבר שולח `settings` ב-`list_rooms`.
-
----
-
-### 9. Re-buy שקט — שחקן מקבל chips בלי הודעה
-**בעיה:** `buildHand` בודק `p.ch <= 0` ומרבאי אוטומטית, אך אין הודעה בממשק.
-
-**קובץ:** `server/game/engine.js:83`
-
-**פתרון:** להוסיף שדה `rebuyed: true` לשחקן, ולהציג toast "שחקן X רבאי בסבוב זה".
-
----
-
-### 10. הודעת "מחובר מחדש" — הבאנר נשאר אחרי reconnect
-**בעיה:** הבאנר האדום "מחבר מחדש..." נעלם רק כשה-socket מחובר. אם השחקן reconnect מהיר — הבאנר מהבהב ונעלם. אך אין אינדיקציה שהחיבור הצליח חזרה.
-
-**קובץ:** `src/screens/OnlineGameScreen.jsx:397`
-
-**פתרון:** להציג flash ירוק "✓ חובר מחדש" ל-2 שניות אחרי reconnect.
-
----
-
-## 🟢 P2 — שיפורים ואבטחה
-
-### 11. אין rate limiting על create_room / join_room
-**בעיה:** לקוח יכול לשלוח אינסוף requests ולמלא את הזיכרון.
-
-**פתרון:** הגבל ל-5 create_room לדקה לכל IP באמצעות `express-rate-limit`.
-
----
-
-### 12. אין validation ל-playerName בשרת
-**בעיה:** שם ריק, שם ארוך מ-20 תווים, או שם עם תווים מיוחדים עוברים ללא בדיקה.
-
-**קובץ:** `server/index.js:186`
-
-**פתרון:**
-```js
-if (!playerName?.trim() || playerName.length > 20) {
-  cb?.({ success:false, error:'שם שחקן לא תקין' }); return;
-}
-```
-
----
-
-### 13. אין validation לסכום ה-RAISE בשרת
-**בעיה:** לקוח יכול לשלוח `amount: -999` או `amount: 999999999`. המנוע יקבע `Math.min` נכון, אך כדאי לדחות מראש.
-
-**קובץ:** `server/index.js:260`
-
----
-
-### 14. `chatOpen` stale closure — unread לא מתעדכן נכון
-**בעיה:** `chatOpen` בתוך `onChat` handler תמיד `false` (ערך ראשוני בזמן ה-mount). גם כשהצ'אט פתוח, counter עולה.
-
-**קובץ:** `src/screens/OnlineGameScreen.jsx:63`
-
-**פתרון:** להשתמש ב-`useRef` לעקוב אחר `chatOpen`:
-```js
-const chatOpenRef = useRef(false);
-useEffect(() => { chatOpenRef.current = chatOpen; }, [chatOpen]);
-// ב-onChat:
-if (!chatOpenRef.current) setUnread(u => u + 1);
-```
-
----
-
-### 15. ריבוי חדרים מתים בזיכרון
-**בעיה:** כל disconnect מריץ `setTimeout` של 5 דקות. מספר disconnects לאותו חדר יוצרים timeouts מרובים. הראשון שרץ מוחק את החדר, השאר מנסים `rooms.get` ומוצאים `undefined`.
-
-**קובץ:** `server/index.js:333`
-
-**פתרון:** הוסף `WeakMap` או flag על החדר לסמן שהוא בתהליך cleanup, כדי למנוע ריצות כפולות.
-
----
-
-### 16. הטיימר האוטומטי לא מריץ `startTurnTimer` לאחר phase advance
-**בעיה:** כשהטיימר מפעיל auto-fold/check ומוביל לשינוי phase — יש `startTurnTimer(room)` רק אם `!result.handOver` ולא כשה-phase השתנה.
-
-**בדיקה:** שורה 120 — `else startTurnTimer(room)` רץ רק אם `!result.handOver`. אם phase השתנה, הוא עדיין קורא `startTurnTimer`. נראה תקין. **לאמת בפועל.**
-
----
-
-### 17. לוח מובילים לא מוצג ב-mobile כראוי
-**בדיקה:** `StatsScreen` לא נבדק על mobile. כדאי לוודא שהטבלה responsive.
-
----
-
-## 📋 סדר ביצוע מומלץ
+## 🎯 הבא בתור
 
 | # | משימה | קושי | השפעה |
 |---|-------|------|--------|
-| 1 | תקן `spectator_state` דורס קלפים | קל | 🔴 גבוהה |
-| 2 | הוסף `leave_room` event | בינוני | 🔴 גבוהה |
-| 3 | auto-timer להתחלת יד חדשה (15s) | קל | 🟡 בינונית |
-| 4 | טיימר ויזואלי באונליין | בינוני | 🟡 בינונית |
-| 5 | תקן `chatOpen` stale closure | קל | 🟢 נמוכה |
-| 6 | validation שם שחקן בשרת | קל | 🟢 נמוכה |
-| 7 | הצג הגדרות חדר ברשימה | קל | 🟡 בינונית |
-| 8 | ממש Blinds עולים | בינוני | 🟡 בינונית |
-| 9 | "מוכן" לפני יד חדשה | בינוני | 🟡 בינונית |
-| 10 | התמדת חדרים ב-SQLite | קשה | 🔴 גבוהה |
+| 9 | flash ירוק "✓ חובר מחדש" | קל | 🟡 בינונית |
+| 10 | הודעת re-buy בממשק | קל | 🟡 בינונית |
+| 11 | `handleExit` כש-socket מנותק | קל | 🟡 בינונית |
+| 12 | rate-limit `create_room`/`join_room` | קל | 🟢 נמוכה |
+| 13 | rate-limit `chat_message` | קל | 🟢 נמוכה |
+
+---
+
+## 🟡 P1 — פתוחים
+
+### ⬜ 9. אין flash ירוק אחרי reconnect מוצלח
+**בעיה:** הבאנר האדום "מחבר מחדש..." נעלם מיד כשה-socket מחובר, בלי אינדיקציה חיובית. בריקונקט מהיר הוא מהבהב ונעלם.
+
+**קובץ:** [src/screens/OnlineGameScreen.jsx](src/screens/OnlineGameScreen.jsx) (סביב באנר הניתוק)
+
+**פתרון:** flash ירוק "✓ חובר מחדש" ל-2 שניות אחרי `connect` event.
+
+---
+
+### ⬜ 10. Re-buy שקט — שחקן מקבל chips בלי הודעה
+**בעיה:** `buildHand` בודק `p.ch <= 0` ומריבאי אוטומטית, אך אין הודעה בממשק.
+
+**קובץ:** [server/game/engine.js:85](server/game/engine.js#L85)
+
+**פתרון:** סמן שדה `rebuyed: true` לשחקן בתחילת hand. בלקוח — toast "שחקן X רבאי בסבוב זה". איפוס הדגל בסוף ה-hand.
+
+---
+
+### ⬜ 11. `handleExit` לא שולח `leave_room` כש-socket מנותק
+**בעיה:** ב-[src/screens/OnlineGameScreen.jsx:211](src/screens/OnlineGameScreen.jsx#L211): `if (!isSpectator && socket?.connected) socket.emit('leave_room')`. אם השחקן יוצא כשה-socket בריקונקט — המידע לא נשלח. השחקן ייחשב מחובר עד ל-cleanup (5 דק').
+
+**פתרון:** הסר את ה-guard `socket?.connected` — Socket.IO buffers ב-default. או סמן ב-localStorage ושלח על reconnect.
+
+---
+
+## 🟢 P2 — פתוחים
+
+### ⬜ 12. אין rate limiting על `create_room` / `join_room`
+**בעיה:** לקוח יכול לשלוח אינסוף requests ולמלא את הזיכרון.
+
+**פתרון:** `express-rate-limit` ל-HTTP, או counter ידני על socket id (5 לדקה).
+
+---
+
+### ⬜ 13. אין rate limit על `chat_message`
+**בעיה:** [server/index.js](server/index.js) — שחקן יכול לשלוח אינסוף הודעות. הצפת ה-chat.
+
+**פתרון:** `Map<socketId, lastChatAt>`, דחה הודעה אם פחות מ-500ms עברו.
+
+---
+
+### ⬜ 14. סיסמת חדר נשלחת בגלוי (plaintext)
+**בעיה:** `join_room` payload כולל password ב-plaintext, ונשמרת כך ב-`room.settings.password`.
+
+**פתרון:** hash סיסמאות עם bcrypt בשרת. הלקוח שולח plaintext מעל WSS, השרת משווה hash-to-hash.
+
+---
+
+### ⬜ 15. `db.saveRoom` שגיאות שותקות — אובדן נתונים שקט
+**בעיה:** [server/index.js:83](server/index.js#L83) — fire-and-forget. PG down → שום אינדיקציה.
+
+**פתרון:** עטיפת error: `logger.error('db', 'saveRoom נכשל', ...)` + event `db_error` ל-admins.
+
+---
+
+### ⬜ 16. PostgreSQL pool — `max:5` ללא `idleTimeoutMillis`
+**בעיה:** [server/db.js:42-46](server/db.js#L42). תחת עומס (6+ בו זמנית) — חסימה.
+
+**פתרון:**
+```js
+new Pool({ ..., max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 5000 });
+```
+
+---
+
+### ⬜ 17. אין validation: `buyIn >= SB + BB`
+**בעיה:** ניתן ליצור חדר עם buyIn=100, SB=200, BB=400. SB/BB יורדים ל-0 ב-`Math.min`, המשחק "באוויר".
+
+**פתרון:** validation בלקוח ובשרת (ב-`create_room` handler).
+
+---
+
+### ⬜ 18. `setGs` אחרי unmount — React warning
+**בעיה:** listeners של socket עדיין פעילים בעת unmount. הודעה שמגיעה בין `handleExit` ל-cleanup → `setGs` על unmounted component.
+
+**פתרון:** `mountedRef = useRef(true); useEffect(() => () => { mountedRef.current = false; }, [])`. הגנה לפני setState.
+
+---
+
+### ⬜ 19. `StatsScreen` שגיאות API שותקות
+**בעיה:** `catch(() => setLeaderboard([]))` — אם /api/stats נופל, רואים "אין נתונים" במקום שגיאה.
+
+**פתרון:** `setError(e.message)` + באנר אדום.
+
+---
+
+### ⬜ 20. `StatsScreen` לא responsive במובייל
+**בדיקה:** הטבלה לא נבדקה במובייל. וודא גלילה אופקית, fontSize מותאם.
+
+---
+
+### ⬜ 21. אין notification sound כשהתור של השחקן
+**בעיה:** רק countdown ויזואלי. שחקן ב-tab אחר מפספס.
+
+**פתרון:** beep קצר על `gs.turn === myIdx` (עם mute באפשרויות).
+
+---
+
+### 🚧 22. הטיימר האוטומטי לאחר phase advance (לאמת)
+**סטטוס:** נראה תקין בקוד הנוכחי. **לאמת בפועל בבדיקת run-through.**
+
+---
+
+## 🟦 P3 — מנוע פוקר (Engine edge cases)
+
+### ⬜ 23. `awardPots` — שארית תמיד הולכת לשחקן הראשון
+**בעיה:** [server/game/pots.js:46-48](server/game/pots.js#L46): כש-split לא מתחלק שווה — winners[0] מקבל +1 בכל פעם.
+
+**פתרון:** רוטציה לפי dealer position.
+
+---
+
+### ⬜ 24. UTG כשכל השחקנים all-in
+**בעיה:** [server/game/engine.js:120-121](server/game/engine.js#L120): אם כולם `ch<=0` — `utg` נשאר על all-in. הפעולה תיכשל או תדלג בלי לקדם phase.
+
+**פתרון:** אם הלולאה לא מצאה — קרא ל-`advancePhase` ישירות.
+
+---
+
+### ⬜ 25. `nextActive`/`nextActiveWithChips` — אין הגנת fallback
+**בעיה:** [server/game/engine.js:127-131](server/game/engine.js#L127): כשלולאה נכשלת מחזירה `nx` שגוי. Callers לא בודקים.
+
+**פתרון:** החזר `-1` אם `tries >= n`, ובדוק בכל caller.
+
+---
+
+## 📦 ארכיון — הושלם
+
+| # | משימה | קובץ / קומיט |
+|---|-------|---------------|
+| — | `spectator_state` דורס קלפים | [server/index.js:93](server/index.js#L93) |
+| — | התמדת חדרים ב-PostgreSQL | 22cbbf1 |
+| — | `leave_room` event | [server/index.js:444](server/index.js#L444) |
+| — | טיימר ויזואלי אונליין | 2906db0 |
+| — | auto-timer 15s ליד חדשה | [server/index.js:151](server/index.js#L151) |
+| — | הגדרות חדר בלובי | [LobbyScreen.jsx:218](src/screens/LobbyScreen.jsx#L218) |
+| — | validation שם שחקן | [server/index.js:181](server/index.js#L181) |
+| — | validation סכום RAISE | [server/index.js:362](server/index.js#L362) |
+| — | `chatOpen` stale closure | 2906db0 |
+| 1 | **Zombie turn-timer** — guard ב-setTimeout | [server/index.js:179](server/index.js#L179) |
+| 2 | **Dealer rotation** אחרי `leave_room` ו-`new_hand` | [server/index.js:122,440](server/index.js#L122) |
+| 3 | **`pagehide` listener** — סגירת tab | [OnlineGameScreen.jsx:128](src/screens/OnlineGameScreen.jsx#L128) |
+| 4 | **שחזור deadline טיימר** ב-reconnect | server שולח `turnStartedAt`, לקוח מסנכרן |
+| 5 | **מערכת "מוכן"** לפני יד חדשה | `player_ready` event + UI |
+| 6 | **Blinds עולים** (25% כל 5 ידות) | [engine.js:62-78](server/game/engine.js#L62) |
+| 7 | **Double-action protection** (≥150ms) | [server/index.js:362](server/index.js#L362) |
+| 8 | **Single cleanup timer** per room | [server/index.js:130](server/index.js#L130) |
+
+---
+
+## 📊 סטטוס כללי
+
+- **הושלם בסשנים אחרונים:** 17 פריטים (9 קודם + 8 בסשן הזה)
+- **נשארו פתוחים:** 17 פריטים (0 P0, 3 P1, 11 P2, 3 P3)
+- **הבא בתור:** #9 (flash ירוק reconnect) — UX קצר, סוגר loop של "מצב חיבור"

@@ -36,6 +36,7 @@ function createRoom(id, name, settings) {
       pkey: 0,
       handNum: 0,
       contributions: [],   // cumulative chips each player put in this hand
+      readyForNext: [],    // names of players who clicked "מוכן" during showdown
     },
     socketMap: {},     // playerName -> socketId
     handLog: [],       // { winnerName, pot, wasManipulated }
@@ -59,6 +60,9 @@ function addPlayer(room, playerName, avatar, socketId) {
 }
 
 // ── Deal new hand ──────────────────────────────────────────────────────────
+const BLINDS_UP_EVERY_HANDS = 5;
+const BLINDS_UP_FACTOR      = 1.25;
+
 function buildHand(room, winBoosts = {}) {
   const state   = room.state;
   const players = state.players;
@@ -66,6 +70,18 @@ function buildHand(room, winBoosts = {}) {
   const dealer  = state.dealerIdx;
   const sb      = (dealer+1)%n;
   const bb      = (dealer+2)%n;
+
+  // Optionally raise blinds every N hands (25% each step).
+  // Mutates room.settings so future hands see the new values and clients display them.
+  let blindsRaised = false;
+  if (room.settings.blindsUp) {
+    const nextHandNum = state.handNum + 1; // we're about to deal this hand
+    if (nextHandNum > 1 && (nextHandNum - 1) % BLINDS_UP_EVERY_HANDS === 0) {
+      room.settings.sb = Math.max(1, Math.round(room.settings.sb * BLINDS_UP_FACTOR));
+      room.settings.bb = Math.max(2, Math.round(room.settings.bb * BLINDS_UP_FACTOR));
+      blindsRaised = true;
+    }
+  }
 
   // Decide if any player gets a boost this hand
   let boostedIdx = -1;
@@ -120,6 +136,7 @@ function buildHand(room, winBoosts = {}) {
     handNum: state.handNum+1,
     contributions,
     boostedPlayerName: wasManipulated ? players[boostedIdx].name : null,
+    blindsRaised,
   };
 }
 
@@ -332,6 +349,9 @@ function stateForPlayer(room, viewerName) {
     handNum:     s.handNum,
     potSummary:  s.winner?.potSummary || [],
     rakeOwner:   room.rakeOwner || null,
+    turnStartedAt: s.turnStartedAt || null,
+    turnDeadline:  s.turnDeadline  || null,
+    readyForNext:  s.readyForNext  || [],
   };
 }
 
@@ -364,6 +384,9 @@ function stateForSpectator(room) {
     handNum:     s.handNum,
     potSummary:  s.winner?.potSummary || [],
     rakeOwner:   room.rakeOwner || null,
+    turnStartedAt: s.turnStartedAt || null,
+    turnDeadline:  s.turnDeadline  || null,
+    readyForNext:  s.readyForNext  || [],
   };
 }
 

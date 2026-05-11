@@ -50,8 +50,13 @@ if (IS_PROD) {
 }
 
 // ── In-memory room registry ────────────────────────────────────────────────
-const rooms      = new Map();   // roomId -> room object
-const turnTimers = new Map();   // roomId -> timeoutId
+const rooms         = new Map();   // roomId -> room object
+const turnTimers    = new Map();   // roomId -> timeoutId
+const newHandTimers = new Map();   // roomId -> timeoutId — auto-advance after showdown
+const cleanupTimers = new Map();   // roomId -> timeoutId — abandoned-room reaper
+
+const NEW_HAND_DELAY_MS = 15000;
+const ROOM_CLEANUP_MS   = 5 * 60 * 1000;
 
 app.locals.getRooms = () =>
   [...rooms.values()].map(r => ({
@@ -108,11 +113,102 @@ function clearTurnTimer(roomId) {
   if (t) { clearTimeout(t); turnTimers.delete(roomId); }
 }
 
+function clearNewHandTimer(roomId) {
+  const t = newHandTimers.get(roomId);
+  if (t) { clearTimeout(t); newHandTimers.delete(roomId); }
+}
+
+function clearCleanupTimer(roomId) {
+  const t = cleanupTimers.get(roomId);
+  if (t) { clearTimeout(t); cleanupTimers.delete(roomId); }
+}
+
+// Single cleanup timer per room. Replaces any pending one — prevents the
+// stampede of multiple 5-minute timeouts when several sockets disconnect.
+function scheduleRoomCleanup(roomId) {
+  clearCleanupTimer(roomId);
+  cleanupTimers.set(roomId, setTimeout(() => {
+    cleanupTimers.delete(roomId);
+    const r = rooms.get(roomId);
+    if (!r) return;
+    if (r.state.players.every(x => !x.connected)) {
+      clearTurnTimer(roomId);
+      clearNewHandTimer(roomId);
+      handActionLogs.delete(roomId);
+      spectatorSockets.delete(roomId);
+      rooms.delete(roomId);
+      db.deleteRoom(roomId);
+      logger.info('room', 'חדר נמחק (כולם התנתקו)', { roomId });
+    }
+  }, ROOM_CLEANUP_MS));
+}
+
+// Filter out players who explicitly left during the previous hand and rebuild
+// derived seating fields. Returns true if at least 2 players remain.
+function pruneLeftPlayers(room) {
+  const before = room.state.players.length;
+  const remaining = room.state.players.filter(p => !p.left);
+  if (remaining.length < before) {
+    const dealerName = room.state.players[room.state.dealerIdx]?.name;
+    for (const p of room.state.players) { if (p.left) delete room.socketMap[p.name]; }
+    room.state.players = remaining;
+    room.state.bets   = remaining.map(() => 0);
+    remaining.forEach((p, i) => { p.seatIdx = i; });
+    const newDealer = dealerName ? remaining.findIndex(p => p.name === dealerName) : -1;
+    room.state.dealerIdx = newDealer >= 0 ? newDealer : 0;
+    logger.info('room', `הוסרו ${before - remaining.length} שחקנים שיצאו`, { roomId: room.id });
+  }
+  return room.state.players.length >= 2;
+}
+
+// Shared "start the next hand" routine. Used both by the ready-flow trigger
+// and by the 15s auto-timer failsafe.
+function startNewHand(room, { auto = false } = {}) {
+  clearNewHandTimer(room.id);
+  handActionLogs.delete(room.id);
+  room.state.readyForNext = [];
+
+  if (!pruneLeftPlayers(room)) {
+    room.state.phase = 'waiting';
+    broadcastRoom(room);
+    broadcastSpectators(room);
+    return false;
+  }
+
+  engine.rotateDealerForNewHand(room);
+  engine.buildHand(room, db.getWinBoosts());
+  io.to(room.id).emit('action_event', { type: 'new_hand', handNum: room.state.handNum, auto });
+  if (room.state.blindsRaised) {
+    io.to(room.id).emit('action_event', { type: 'blinds_up', sb: room.settings.sb, bb: room.settings.bb });
+  }
+  broadcastRoom(room);
+  broadcastSpectators(room);
+  startTurnTimer(room);
+  logger.info('room', auto ? 'יד חדשה אוטומטית' : 'יד חדשה', { roomId: room.id, handNum: room.state.handNum });
+  return true;
+}
+
+// Auto-start the next hand if not everyone marked ready within NEW_HAND_DELAY_MS.
+function scheduleAutoNewHand(room) {
+  clearNewHandTimer(room.id);
+  newHandTimers.set(room.id, setTimeout(() => {
+    newHandTimers.delete(room.id);
+    const r = rooms.get(room.id);
+    if (!r || r.state.phase !== 'showdown') return;
+    startNewHand(r, { auto: true });
+  }, NEW_HAND_DELAY_MS));
+}
+
 function startTurnTimer(room) {
   clearTurnTimer(room.id);
   const { timer, bank, autoAction } = room.settings;
   const totalMs = (timer + bank + 3) * 1000;
-  turnTimers.set(room.id, setTimeout(() => {
+  const roomId = room.id;
+  // Record absolute deadline so clients reconnecting mid-turn can sync remaining time
+  room.state.turnStartedAt = Date.now();
+  room.state.turnDeadline  = Date.now() + totalMs;
+  turnTimers.set(roomId, setTimeout(() => {
+    if (!rooms.has(roomId)) return; // room was deleted while timer was pending
     const s = room.state;
     if (s.phase === 'showdown' || s.phase === 'waiting') return;
     const playerName = s.players[s.turn]?.name || '?';
@@ -124,8 +220,10 @@ function startTurnTimer(room) {
     if (result.handOver) persistHand(room);
     broadcastRoom(room);
     broadcastSpectators(room);
-    if (result.handOver) io.to(room.id).emit('action_event', { type: 'showdown' });
-    else if (room.state.phase !== s.phase) io.to(room.id).emit('action_event', { type: 'phase', phase: room.state.phase });
+    if (result.handOver) {
+      io.to(room.id).emit('action_event', { type: 'showdown' });
+      scheduleAutoNewHand(room);
+    } else if (room.state.phase !== s.phase) io.to(room.id).emit('action_event', { type: 'phase', phase: room.state.phase });
     else startTurnTimer(room);
   }, totalMs));
 }
@@ -204,6 +302,11 @@ io.on('connection', socket => {
     if (existing) {
       const wasConnected = existing.connected;
       existing.connected = true;
+      // If they had explicitly left mid-hand, clear the flag so they're not
+      // filtered out at the next hand. (They remain folded for the current one.)
+      if (existing.left) existing.left = false;
+      // Someone's back — cancel pending abandoned-room cleanup
+      clearCleanupTimer(roomId);
       room.socketMap[pName] = socket.id;
       socket.join(roomId);
       myRoomId = roomId; myName = pName;
@@ -271,11 +374,19 @@ io.on('connection', socket => {
   });
 
   // Player action
+  let lastActionAt = 0;
   socket.on('action', ({ type, amount }) => {
     const room = rooms.get(myRoomId);
     if (!room || !myName || isSpectator) {
       logger.warn('action', 'פעולה נדחתה', { myName, myRoomId, isSpectator }); return;
     }
+    // Reject rapid double-emits (e.g. tap twice / network retry) before state catches up
+    const now = Date.now();
+    if (now - lastActionAt < 150) {
+      logger.warn('action', 'פעולה כפולה מהירה', { myName, dt: now - lastActionAt });
+      return;
+    }
+    lastActionAt = now;
     const s = room.state;
     const playerIdx = s.players.findIndex(p => p.name === myName);
     if (playerIdx !== s.turn) { logger.warn('action', 'לא התור של השחקן', { myName, turn: s.turn, playerIdx }); return; }
@@ -296,7 +407,8 @@ io.on('connection', socket => {
     }
     broadcastRoom(room);
     broadcastSpectators(room);
-    if (!result.handOver) startTurnTimer(room);
+    if (result.handOver) scheduleAutoNewHand(room);
+    else startTurnTimer(room);
   });
 
   // Chat
@@ -315,18 +427,92 @@ io.on('connection', socket => {
     else if (myName) socket.emit('game_state', engine.stateForPlayer(room, myName));
   });
 
-  // New hand
-  socket.on('new_hand', cb => {
+  // Mark/unmark this player as ready for the next hand.
+  // When every connected, non-left player is ready, the new hand starts immediately;
+  // otherwise the 15s auto-timer is the failsafe.
+  socket.on('player_ready', ({ ready = true } = {}, cb) => {
     const room = rooms.get(myRoomId);
-    if (!room || room.state.phase !== 'showdown') { cb?.({ success: false }); return; }
-    handActionLogs.delete(myRoomId);
-    engine.rotateDealerForNewHand(room);
-    engine.buildHand(room, db.getWinBoosts());
-    io.to(myRoomId).emit('action_event', { type: 'new_hand', handNum: room.state.handNum });
+    if (!room || isSpectator || !myName) { cb?.({ success: false }); return; }
+    if (room.state.phase !== 'showdown') { cb?.({ success: false, error: 'לא בסיכום יד' }); return; }
+
+    const readySet = new Set(room.state.readyForNext || []);
+    if (ready) readySet.add(myName); else readySet.delete(myName);
+    room.state.readyForNext = [...readySet];
+
+    // Eligible = connected players who haven't left mid-hand
+    const eligible = room.state.players.filter(p => p.connected && !p.left).map(p => p.name);
+    const allReady = eligible.length >= 2 && eligible.every(n => readySet.has(n));
+
+    if (allReady) {
+      startNewHand(room);
+    } else {
+      broadcastRoom(room);
+      broadcastSpectators(room);
+    }
+    cb?.({ success: true, allReady });
+  });
+
+
+  // Leave room — explicit exit (vs disconnect)
+  socket.on('leave_room', cb => {
+    const room = rooms.get(myRoomId);
+    if (!room || isSpectator || !myName) { cb?.({ success: false }); return; }
+    const idx = room.state.players.findIndex(p => p.name === myName);
+    if (idx === -1) { cb?.({ success: false }); return; }
+
+    const leavingName = myName;
+    const leavingRoomId = myRoomId;
+    const phase = room.state.phase;
+
+    if (phase === 'waiting') {
+      // Hard remove — game hasn't started yet
+      const dealerName = room.state.players[room.state.dealerIdx]?.name;
+      room.state.players.splice(idx, 1);
+      room.state.bets.splice(idx, 1);
+      delete room.socketMap[leavingName];
+      room.state.players.forEach((p, i) => { p.seatIdx = i; });
+      const newDealer = dealerName ? room.state.players.findIndex(p => p.name === dealerName) : -1;
+      room.state.dealerIdx = newDealer >= 0 ? newDealer : 0;
+    } else {
+      // Mid-hand — mark as left, fold them, advance turn if needed
+      const p = room.state.players[idx];
+      p.left = true;
+      p.connected = false;
+
+      if (phase !== 'showdown' && !p.f) {
+        if (room.state.turn === idx) {
+          // It's their turn — process FOLD to advance the game
+          clearTurnTimer(room.id);
+          appendAction(leavingRoomId, { playerName: leavingName, action: 'FOLD', amount: 0, phase });
+          io.to(leavingRoomId).emit('action_event', { sender: leavingName, type: 'FOLD', amount: 0, auto: true });
+          const result = engine.processAction(room, idx, 'FOLD');
+          if (result.handOver) {
+            persistHand(room);
+            io.to(leavingRoomId).emit('action_event', { type: 'showdown' });
+            scheduleAutoNewHand(room);
+          } else if (room.state.phase !== phase) {
+            io.to(leavingRoomId).emit('action_event', { type: 'phase', phase: room.state.phase });
+          }
+          if (!result.handOver) startTurnTimer(room);
+        } else {
+          // Not their turn — just mark folded so they're skipped
+          p.f = true;
+        }
+      }
+    }
+
+    // Disassociate this socket from the room
+    socket.leave(leavingRoomId);
+    myRoomId = null;
+    myName   = null;
+
+    broadcastToRoom(room, 'player_left', { playerName: leavingName });
     broadcastRoom(room);
     broadcastSpectators(room);
-    startTurnTimer(room);
+    db.saveRoom(room);
+
     cb?.({ success: true });
+    logger.info('room', 'שחקן יצא מהחדר', { roomId: leavingRoomId, playerName: leavingName, phase });
   });
 
   // Disconnect
@@ -345,19 +531,9 @@ io.on('connection', socket => {
     if (p) p.connected = false;
     broadcastToRoom(room, 'player_disconnected', { playerName: myName });
 
-    // Clean up room after 5 min if all players disconnected
-    setTimeout(() => {
-      const r = rooms.get(myRoomId);
-      if (!r) return;
-      if (r.state.players.every(x => !x.connected)) {
-        clearTurnTimer(myRoomId);
-        handActionLogs.delete(myRoomId);
-        spectatorSockets.delete(myRoomId);
-        rooms.delete(myRoomId);
-        db.deleteRoom(myRoomId);
-        logger.info('room', 'חדר נמחק (כולם התנתקו)', { roomId: myRoomId });
-      }
-    }, 5 * 60 * 1000);
+    // One reaper per room — replaces any earlier pending one so we don't
+    // accumulate timeouts when several players disconnect in sequence.
+    scheduleRoomCleanup(myRoomId);
   });
 });
 
