@@ -100,7 +100,7 @@ export function HelpButton({ screen }) {
                       <div style={{ fontSize: 9, color: '#666', fontWeight: 700, marginBottom: 4, letterSpacing: 1 }}>
                         דוגמה
                       </div>
-                      <div style={{ fontSize: 11, color: '#A0A', lineHeight: 1.7, whiteSpace: 'pre-line', color: '#9FC' }}>
+                      <div style={{ fontSize: 11, lineHeight: 1.7, whiteSpace: 'pre-line', color: '#9FC' }}>
                         {sec.example}
                       </div>
                     </div>

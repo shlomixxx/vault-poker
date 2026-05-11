@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 
 // In production the server serves the client from the same origin — connect to ''.
@@ -8,12 +8,12 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? '';
 export const SocketContext = createContext(null);
 
 export function SocketProvider({ children }) {
-  const socketRef = useRef(null);
+  const [socket,       setSocket]       = useState(null);
   const [connected,    setConnected]    = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
 
   useEffect(() => {
-    const socket = io(SERVER_URL || undefined, {
+    const s = io(SERVER_URL || undefined, {
       autoConnect: true,
       withCredentials: false,
       reconnection: true,
@@ -22,20 +22,20 @@ export function SocketProvider({ children }) {
       reconnectionDelayMax: 10000,
       timeout: 20000,
     });
-    socketRef.current = socket;
+    setSocket(s);
 
-    socket.on('connect',             () => { setConnected(true);  setReconnecting(false); });
-    socket.on('disconnect',          () => { setConnected(false); });
-    socket.on('reconnect_attempt',   () => setReconnecting(true));
-    socket.on('reconnect',           () => { setConnected(true);  setReconnecting(false); });
-    socket.on('reconnect_error',     () => setReconnecting(true));
-    socket.on('reconnect_failed',    () => setReconnecting(false));
+    s.on('connect',             () => { setConnected(true);  setReconnecting(false); });
+    s.on('disconnect',          () => { setConnected(false); });
+    s.on('reconnect_attempt',   () => setReconnecting(true));
+    s.on('reconnect',           () => { setConnected(true);  setReconnecting(false); });
+    s.on('reconnect_error',     () => setReconnecting(true));
+    s.on('reconnect_failed',    () => setReconnecting(false));
 
-    return () => socket.disconnect();
+    return () => s.disconnect();
   }, []);
 
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current, connected, reconnecting }}>
+    <SocketContext.Provider value={{ socket, connected, reconnecting }}>
       {children}
     </SocketContext.Provider>
   );

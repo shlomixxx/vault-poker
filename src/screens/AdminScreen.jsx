@@ -182,13 +182,13 @@ export function AdminScreen({ onExit }) {
                 {history.map(h => (
                   <tr key={h.id} style={{ borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
                     <td style={{ padding:'7px 8px', color:'#555' }}>{h.id}</td>
-                    <td style={{ padding:'7px 8px', color:'#C5A028', fontFamily:'Georgia,serif', fontWeight:700 }}>{h.room_id}</td>
-                    <td style={{ padding:'7px 8px', color:'#888' }}>{h.hand_num}</td>
-                    <td style={{ padding:'7px 8px', color:'#EEE', fontWeight:700 }}>{h.winner_name}</td>
+                    <td style={{ padding:'7px 8px', color:'#C5A028', fontFamily:'Georgia,serif', fontWeight:700 }}>{h.roomId}</td>
+                    <td style={{ padding:'7px 8px', color:'#888' }}>{h.handNum}</td>
+                    <td style={{ padding:'7px 8px', color:'#EEE', fontWeight:700 }}>{h.winnerName}</td>
                     <td style={{ padding:'7px 8px', color:'#E5C94B' }}>{h.pot?.toLocaleString()}</td>
-                    <td style={{ padding:'7px 8px', color:'#AAA' }}>{h.winning_hand_he}</td>
-                    <td style={{ padding:'7px 8px' }}>{h.was_boosted ? <span style={{ color:'#F97316', fontWeight:700 }}>⚡ כן</span> : <span style={{ color:'#555' }}>לא</span>}</td>
-                    <td style={{ padding:'7px 8px', color:'#555', fontSize:10 }}>{new Date(h.played_at*1000).toLocaleTimeString('he-IL')}</td>
+                    <td style={{ padding:'7px 8px', color:'#AAA' }}>{h.handHe}</td>
+                    <td style={{ padding:'7px 8px' }}>{h.wasManipulated ? <span style={{ color:'#F97316', fontWeight:700 }}>⚡ כן</span> : <span style={{ color:'#555' }}>לא</span>}</td>
+                    <td style={{ padding:'7px 8px', color:'#555', fontSize:10 }}>{new Date(h.playedAt).toLocaleTimeString('he-IL')}</td>
                   </tr>
                 ))}
               </tbody>

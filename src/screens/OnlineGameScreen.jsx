@@ -41,17 +41,22 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
   useEffect(() => {
     if (!socket) return;
 
-    // כל פעם שה-socket מתחבר מחדש: רשום מחדש בשרת כדי לעדכן את ה-socketMap
-    if (isSpectator && roomId) {
-      socket.emit('spectate_room', { roomId });
-    } else if (playerName && roomId) {
-      // join_room מטפל גם בהצטרפות ראשונה וגם ב-reconnect (מעדכן socket ID בשרת)
-      socket.emit('join_room', { roomId, playerName }, (res) => {
-        if (!res?.success && !res?.reconnected) socket.emit('get_state');
-      });
-    } else {
-      socket.emit('get_state');
-    }
+    const doJoin = () => {
+      if (isSpectator && roomId) {
+        socket.emit('spectate_room', { roomId });
+      } else if (playerName && roomId) {
+        socket.emit('join_room', { roomId, playerName }, (res) => {
+          if (!res?.success && !res?.reconnected) socket.emit('get_state');
+        });
+      } else {
+        socket.emit('get_state');
+      }
+    };
+
+    // Initial join / re-join on first render with this socket
+    doJoin();
+    // Re-join every time the socket reconnects (new socket ID on server)
+    socket.on('connect', doJoin);
 
     const onState = (state) => {
       setGs(state);
@@ -98,6 +103,7 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
     socket.on('error',               ({ message }) => showToast(message));
 
     return () => {
+      socket.off('connect', doJoin);
       socket.off('game_state', onState);
       socket.off('spectator_state', onState);
       socket.off('chat_message', onChat);
