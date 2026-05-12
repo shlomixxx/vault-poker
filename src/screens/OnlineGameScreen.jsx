@@ -33,6 +33,8 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
   const [bankRemaining,  setBankRemaining]  = useState(0);
   const [inBank,         setInBank]         = useState(false);
   const [nextHandIn,     setNextHandIn]     = useState(0);
+  const [communityW,     setCommunityW]     = useState(38);
+  const tableRef    = useRef(null);
   const raiseRef    = useRef(40);
   const chatEndRef  = useRef(null);
   const chatOpenRef = useRef(false);
@@ -135,6 +137,24 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
     window.addEventListener('pagehide', onPageHide);
     return () => window.removeEventListener('pagehide', onPageHide);
   }, [socket, isSpectator]);
+
+  // Size the 5 community cards so they don't overflow seats on narrow screens.
+  // Target: cards take ≤55% of the table's playable width.
+  useEffect(() => {
+    const el = tableRef.current;
+    if (!el) return;
+    const recalc = () => {
+      const tableW = el.clientWidth;
+      // 5 cards + 4 gaps (~9% each) + ~32% padding/border slack ≈ tableW*0.55
+      // Inner playable width is ~91% of table; want community ≤55% of that.
+      const cardW = Math.min(46, Math.max(24, Math.floor((tableW * 0.50 - 24) / 5)));
+      setCommunityW(cardW);
+    };
+    recalc();
+    const ro = new ResizeObserver(recalc);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // ── Turn timer (client-side countdown, synced to server deadline) ────────
   // Uses server-sent `turnStartedAt` so reconnecting mid-turn shows the
@@ -270,7 +290,7 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
       </div>
 
       {/* Table oval */}
-      <div style={{ position:'relative', width:'100%', maxWidth:860, aspectRatio:'4/3.4', maxHeight:'calc(100vh - 170px)', overflow:'hidden' }}>
+      <div ref={tableRef} style={{ position:'relative', width:'100%', maxWidth:860, aspectRatio:'4/3.4', maxHeight:'calc(100vh - 170px)', overflow:'hidden' }}>
         <div style={{ position:'absolute', top:'4%', left:'2%', right:'2%', bottom:'4%', borderRadius:'50%', background:'linear-gradient(180deg,#4A3728,#3D2E22 40%,#2E2218 70%,#1E160F)', boxShadow:'0 16px 50px rgba(0,0,0,0.55)', padding:'2.5%' }}>
           <div style={{ width:'100%', height:'100%', borderRadius:'50%', background:'radial-gradient(ellipse at 50% 42%,#1F7A3A,#176B30 20%,#105824 45%,#0B4A1C 65%,#073814)', boxShadow:'inset 0 0 40px rgba(0,0,0,0.3)', position:'relative' }}>
             {/* Pot */}
@@ -285,7 +305,7 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
             </div>
             {/* Community cards — only render when there are cards to show (not preflop) */}
             <div style={{ position:'absolute', top:'48%', left:'50%', transform:'translate(-50%,-50%)', zIndex:11 }}>
-              {revealCount > 0 && <Community board={board} count={revealCount} pkey={pkey} highlightCards={phase==='showdown'?winnerCards:[]} />}
+              {revealCount > 0 && <Community board={board} count={revealCount} pkey={pkey} highlightCards={phase==='showdown'?winnerCards:[]} w={communityW} h={Math.round(communityW * 1.4)} />}
             </div>
             {/* Seats */}
             {players.map((p, i) => {

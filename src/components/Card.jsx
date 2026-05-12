@@ -38,8 +38,11 @@ export function Card({ card, faceDown = false, w = 44, h = 62, delay = 0, highli
   const suitKey  = card ? card[card.length - 1] : "s";
   const su       = SU[suitKey] || SU.s;
   const isRed    = suitKey === "h" || suitKey === "d";
-  // "10" is wider than single chars — use slightly smaller font so it fits the corner
-  const fs       = rank === "10" ? Math.max(w * 0.26, 10) : Math.max(w * 0.34, 12);
+  // Sans-serif at a larger ratio reads better at small widths than Georgia 900.
+  // "10" needs to be a bit narrower so it fits the corner without clipping.
+  const fs       = rank === "10" ? Math.max(w * 0.34, 11) : Math.max(w * 0.44, 13);
+  const suitFs   = Math.max(w * 0.30, 9);
+  const rankFont = '"Helvetica Neue",Arial,sans-serif';
 
   return (
     <div style={{
@@ -63,23 +66,24 @@ export function Card({ card, faceDown = false, w = 44, h = 62, delay = 0, highli
             ? "0 2px 12px rgba(212,175,55,0.5), 0 0 0 2px #C5A028"
             : "0 1px 4px rgba(0,0,0,0.3)",
           border: highlight ? "2px solid #C5A028" : "none",
+          overflow: "hidden",
         }}>
           {/* Top-left corner */}
-          <div style={{ position: "absolute", top: 2, left: 3, lineHeight: 1 }}>
-            <div style={{ fontSize: fs, fontWeight: 900, color: su.cl, fontFamily: "Georgia,serif", letterSpacing: rank === "10" ? -1 : 0 }}>{rank}</div>
-            <div style={{ fontSize: fs * 0.7, color: su.cl, marginTop: -2 }}>{su.c}</div>
+          <div style={{ position: "absolute", top: w * 0.05, left: w * 0.08, lineHeight: 0.95, textAlign: "left" }}>
+            <div style={{ fontSize: fs, fontWeight: 800, color: su.cl, fontFamily: rankFont, letterSpacing: rank === "10" ? -1.5 : -0.5 }}>{rank}</div>
+            <div style={{ fontSize: suitFs, color: su.cl, marginTop: 1, lineHeight: 1 }}>{su.c}</div>
           </div>
           {/* Center pip */}
           <div style={{
             position: "absolute", top: "50%", left: "50%",
             transform: "translate(-50%,-50%)",
-            fontSize: Math.min(w * 0.44, 24), color: isRed ? "#EF5350" : "#37474F",
-            opacity: 0.7, lineHeight: 1,
+            fontSize: Math.min(w * 0.5, 28), color: isRed ? "#EF5350" : "#37474F",
+            opacity: 0.55, lineHeight: 1,
           }}>{su.c}</div>
           {/* Bottom-right corner (rotated) */}
-          <div style={{ position: "absolute", bottom: 2, right: 3, lineHeight: 1, transform: "rotate(180deg)" }}>
-            <div style={{ fontSize: fs, fontWeight: 900, color: su.cl, fontFamily: "Georgia,serif", letterSpacing: rank === "10" ? -1 : 0 }}>{rank}</div>
-            <div style={{ fontSize: fs * 0.7, color: su.cl, marginTop: -2 }}>{su.c}</div>
+          <div style={{ position: "absolute", bottom: w * 0.05, right: w * 0.08, lineHeight: 0.95, textAlign: "left", transform: "rotate(180deg)" }}>
+            <div style={{ fontSize: fs, fontWeight: 800, color: su.cl, fontFamily: rankFont, letterSpacing: rank === "10" ? -1.5 : -0.5 }}>{rank}</div>
+            <div style={{ fontSize: suitFs, color: su.cl, marginTop: 1, lineHeight: 1 }}>{su.c}</div>
           </div>
         </div>
 
