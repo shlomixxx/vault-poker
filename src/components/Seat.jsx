@@ -26,7 +26,7 @@ export function Seat({ p, pos, isMe, showAll, bet, active, timerData, handResult
         <Hand
           cards={p.c} faceDown={!see}
           w={isMe ? 48 : 30} h={isMe ? 67 : 42} delay={300}
-          highlightCards={showAll ? highlightCards : []}
+          highlightCards={showAll && isWinner ? highlightCards : []}
         />
       ) : p.f ? (
         <div style={{ height: 12, display: "flex", alignItems: "center" }}>
