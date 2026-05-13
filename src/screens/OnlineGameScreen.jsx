@@ -11,11 +11,11 @@ import { hb, sliderStyle, abtn, globalCSS } from '../styles/ui.js';
 const HAND_STRENGTH_PCT = [12, 28, 46, 62, 73, 81, 89, 95, 98, 100];
 
 const SEAT_POSITIONS = [
-  { bottom:"-1%",  left:"50%" }, { bottom:"10%",  left:"15%" },
-  { top:"42%",     left:"10%" }, { top:"16%",     left:"16%" },
-  { top:"7%",      left:"30%" }, { top:"7%",      left:"70%" },
-  { top:"16%",     left:"84%" }, { top:"42%",     left:"90%" },
-  { bottom:"10%",  left:"85%" },
+  { bottom:"-1%",  left:"50%" }, { bottom:"8%",   left:"14%" },
+  { top:"46%",     left:"8%"  }, { top:"22%",     left:"12%" },
+  { top:"10%",     left:"32%" }, { top:"10%",     left:"68%" },
+  { top:"22%",     left:"88%" }, { top:"46%",     left:"92%" },
+  { bottom:"8%",   left:"86%" },
 ];
 
 export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '', onExit }) {

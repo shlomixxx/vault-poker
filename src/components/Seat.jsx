@@ -18,18 +18,18 @@ export function Seat({ p, pos, isMe, showAll, bet, active, timerData, handResult
   // community cards regardless of position math.
   const compactSelf = isMe && hideSelfCards;
   const showHandOnTable = !isMe || !hideSelfCards;
-  // Top- and bottom-row seats render the name above the cards so cards point
-  // into the table instead of off-screen (top row clips against the header,
-  // bottom-center overlaps the community row).
+  // Only flip when the seat is at the extreme top/bottom rows. Corner seats
+  // (top ≈ 16%) keep the default "cards above name" so they don't collide
+  // with the mid-side seat's cards.
   const isBottomSeat = pos?.bottom !== undefined;
   const topPct       = pos?.top ? parseFloat(pos.top) : null;
-  const isTopSeat    = topPct !== null && topPct < 20;
+  const isTopSeat    = topPct !== null && topPct < 12;
   const flipLayout   = isBottomSeat || isTopSeat;
 
   const cardsEl = p.c && p.c.length > 0 && !p.f && showHandOnTable ? (
     <Hand
       cards={p.c} faceDown={!see}
-      w={isMe ? 48 : 30} h={isMe ? 67 : 42} delay={300}
+      w={isMe ? 48 : 26} h={isMe ? 67 : 36} delay={300}
       highlightCards={showAll && isWinner ? highlightCards : []}
     />
   ) : p.f ? (
