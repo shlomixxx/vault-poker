@@ -12,9 +12,11 @@ import { TimerBar } from "./TimerBar";
 export function Seat({ p, pos, isMe, showAll, bet, active, timerData, handResult, isWinner, isDealer, hideSelfCards = false }) {
   const see = isMe || showAll;
   const highlightCards = handResult?.bestCards || [];
-  // hideSelfCards=true → "me" is rendered in the bottom panel.
-  // Keep it that way even at showdown so the user's tall cards don't overlap
-  // the community row on narrow phones.
+  // When hideSelfCards=true (online "me" seat), render JUST the name chip on
+  // the table — no cards, no bet badge, no timer. Everything is in the bottom
+  // panel instead. This guarantees the user's seat can never overlap the
+  // community cards regardless of position math.
+  const compactSelf = isMe && hideSelfCards;
   const showHandOnTable = !isMe || !hideSelfCards;
   // Top- and bottom-row seats render the name above the cards so cards point
   // into the table instead of off-screen (top row clips against the header,
@@ -99,18 +101,20 @@ export function Seat({ p, pos, isMe, showAll, bet, active, timerData, handResult
       opacity: p.f ? 0.25 : 1,
       transition: "opacity 0.3s",
     }}>
+      {/* compactSelf: same flow as flipLayout but cards skipped — they live
+          in the bottom "הקלפים שלך" panel for the user themselves. */}
       {flipLayout ? (
         <>
           {/* Name first so cards face into the table instead of off-screen */}
           {betBadgeEl}
           {nameChipEl}
           {handNameEl}
-          {cardsEl}
+          {!compactSelf && cardsEl}
           {timerEl}
         </>
       ) : (
         <>
-          {cardsEl}
+          {!compactSelf && cardsEl}
           {nameChipEl}
           {handNameEl}
           {betBadgeEl}
