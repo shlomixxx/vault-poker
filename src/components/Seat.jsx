@@ -8,8 +8,10 @@ import { TimerBar } from "./TimerBar";
 export function Seat({ p, pos, isMe, showAll, bet, active, timerData, handResult, isWinner, isDealer, hideSelfCards = false }) {
   const see = isMe || showAll;
   const highlightCards = handResult?.bestCards || [];
-  // hideSelfCards=true when online game shows cards in the bottom panel instead
-  const showHandOnTable = !isMe || showAll || !hideSelfCards;
+  // hideSelfCards=true → "me" is rendered in the bottom panel.
+  // Keep it that way even at showdown so the user's tall cards don't overlap
+  // the community row on narrow phones.
+  const showHandOnTable = !isMe || !hideSelfCards;
 
   return (
     <div style={{

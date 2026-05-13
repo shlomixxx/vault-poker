@@ -370,8 +370,9 @@ export function OnlineGameScreen({ roomId, isSpectator = false, playerName = '',
         </div>
       )}
 
-      {/* My Cards Panel (not for spectators) */}
-      {!isSpectator && phase !== 'showdown' && !players[myIdx]?.f && players[myIdx]?.c?.length === 2 && (
+      {/* My Cards Panel (not for spectators) — shown during play AND showdown
+          so the user always sees their own hole cards in a stable position. */}
+      {!isSpectator && !players[myIdx]?.f && players[myIdx]?.c?.length === 2 && (
         <div style={{ display:'flex', alignItems:'center', gap:12, direction:'ltr', background:'rgba(4,10,4,0.90)', border:'1px solid rgba(68,136,255,0.22)', borderRadius:12, padding:'7px 16px 7px 10px', width:'100%', maxWidth:680, backdropFilter:'blur(8px)', zIndex:15, marginTop:2 }}>
           <div style={{ fontSize:8, color:'#6B9CFF', fontWeight:700, letterSpacing:1, minWidth:36, textAlign:'center', lineHeight:1.5 }}>הקלפים<br/>שלך</div>
           <div style={{ display:'flex', gap:6 }}>
