@@ -16,7 +16,13 @@ export function Seat({ p, pos, isMe, showAll, bet, active, timerData, handResult
   // Keep it that way even at showdown so the user's tall cards don't overlap
   // the community row on narrow phones.
   const showHandOnTable = !isMe || !hideSelfCards;
+  // Top- and bottom-row seats render the name above the cards so cards point
+  // into the table instead of off-screen (top row clips against the header,
+  // bottom-center overlaps the community row).
   const isBottomSeat = pos?.bottom !== undefined;
+  const topPct       = pos?.top ? parseFloat(pos.top) : null;
+  const isTopSeat    = topPct !== null && topPct < 20;
+  const flipLayout   = isBottomSeat || isTopSeat;
 
   const cardsEl = p.c && p.c.length > 0 && !p.f && showHandOnTable ? (
     <Hand
@@ -93,9 +99,9 @@ export function Seat({ p, pos, isMe, showAll, bet, active, timerData, handResult
       opacity: p.f ? 0.25 : 1,
       transition: "opacity 0.3s",
     }}>
-      {isBottomSeat ? (
+      {flipLayout ? (
         <>
-          {/* Bet & timer rendered between seat and community for bottom seats */}
+          {/* Name first so cards face into the table instead of off-screen */}
           {betBadgeEl}
           {nameChipEl}
           {handNameEl}

@@ -13,7 +13,7 @@ const HAND_STRENGTH_PCT = [12, 28, 46, 62, 73, 81, 89, 95, 98, 100];
 const SEAT_POSITIONS = [
   { bottom:"-1%",  left:"50%" }, { bottom:"10%",  left:"15%" },
   { top:"42%",     left:"10%" }, { top:"16%",     left:"16%" },
-  { top:"3%",      left:"34%" }, { top:"3%",      left:"66%" },
+  { top:"7%",      left:"30%" }, { top:"7%",      left:"70%" },
   { top:"16%",     left:"84%" }, { top:"42%",     left:"90%" },
   { bottom:"10%",  left:"85%" },
 ];
